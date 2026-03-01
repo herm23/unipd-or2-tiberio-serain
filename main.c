@@ -2,6 +2,10 @@
 #include "tsp.h"
 #include "chrono.h"
 
+#include <cplex.h>
+
+
+//region mainFunctions
 void parse_command_line(int argc, char **argv, instance *inst);
 
 void free_instance(instance *inst) {
@@ -20,6 +24,8 @@ void print_error(const char *err) {
     exit(1);
 }
 
+//endregion mainFunctions
+
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -35,17 +41,60 @@ int main(int argc, char **argv) {
     instance inst;
 
     parse_command_line(argc, argv, &inst);
-
-    //printf(" file %s has %d non-empty lines\n", inst.input_file, number_of_nonempty_lines(inst.input_file)); exit(1);
-
     read_input(&inst);
-    // if (VRPopt(&inst)) print_error(" error within VRPopt()");
+
+    unsigned int *solution = initialize_solution(inst.nnodes);
+
+    // printf("Initialized identity solution is ");
+    // if (check_tour(&inst, solution) != 0) {
+    //     printf("NOT ");
+    // }
+    // printf("VALID\n");
+
+    const short permutation_status = random_shuffle(solution, inst.nnodes);
+    if (permutation_status != 0) {
+        free(solution);
+        free_instance(&inst);
+        print_error("Error while calculating random permutation!");
+        return 1;
+    }
+
+    short check_solution = check_tour(&inst, solution);
+    if (check_solution != 0) {
+        free(solution);
+        free_instance(&inst);
+        print_error("Solution after random shuffle is NOT VALID!");
+        return 1;
+    }
+
+    plot_tour(&inst, solution, 1);
+    plot_tour(&inst, solution, 0);
+
+    TSPopt(&inst, solution);
+
+    check_solution = check_tour(&inst, solution);
+    if (check_solution != 0) {
+        free(solution);
+        free_instance(&inst);
+        print_error("Solution OPT is NOT VALID!");
+        return 1;
+    }
+
+
+    if (VERBOSE >= 1000) {
+        for (unsigned int i = 0; i < inst.nnodes; ++i) {
+            printf("%d --> %d\n", i, solution[i]);
+        }
+    }
+
+
     double t2 = second();
 
     if (VERBOSE >= 1) {
         printf("... TSP problem solved in %lf sec.s\n", t2 - t1);
     }
 
+    free(solution);
     free_instance(&inst);
     return 0;
 }
@@ -59,10 +108,10 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     strcpy(inst->input_file, "NULL");
     inst->randomseed = 0;
     inst->num_threads = 0;
-    // inst->timelimit = CPX_INFBOUND; //USARE QUESTI
-    // inst->cutoff = CPX_INFBOUND;
-    inst->timelimit = 1e10;
-    inst->cutoff = 1e10;
+    inst->timelimit = CPX_INFBOUND; //USARE QUESTI
+    inst->cutoff = CPX_INFBOUND;
+    // inst->timelimit = 1e10;
+    // inst->cutoff = 1e10;
     inst->integer_costs = 0;
 
     inst->available_memory = 12000; // available memory, in MB, for Cplex execution (e.g., 12000)
@@ -163,8 +212,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
 }
 
 
-void read_input(instance *inst)
-{
+void read_input(instance *inst) {
     FILE *fin = fopen(inst->input_file, "r");
     if (fin == NULL) print_error(" input file not found!");
 
