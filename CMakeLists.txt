@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.0)
 project(unipd_or2_tiberio_serain C)
 
 set(CMAKE_C_STANDARD 11)
-set(CPLEX_ROOT "C:\\Program Files\\IBM\\ILOG\\CPLEX_Studio_Community2212")
+set(CPLEX_ROOT "C:\\Program Files\\IBM\\ILOG\\CPLEX_Studio2212")
 
 add_executable(unipd_or2_tiberio_serain main.c
         tsp.c

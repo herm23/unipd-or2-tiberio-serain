@@ -9,11 +9,11 @@
 void parse_command_line(int argc, char **argv, instance *inst);
 
 void free_instance(instance *inst) {
-    free(inst->demand);
+    // free(inst->demand);
     free(inst->xcoord);
     free(inst->ycoord);
-    free(inst->load_min);
-    free(inst->load_max);
+    // free(inst->load_min);
+    // free(inst->load_max);
 }
 
 void read_input(instance *inst);
@@ -70,7 +70,9 @@ int main(int argc, char **argv) {
     plot_tour(&inst, solution, 1);
     plot_tour(&inst, solution, 0);
 
-    TSPopt(&inst, solution);
+    // TSPopt(&inst, solution);
+
+    plot_tour(&inst, solution, 0);
 
     check_solution = check_tour(&inst, solution);
     if (check_solution != 0) {
