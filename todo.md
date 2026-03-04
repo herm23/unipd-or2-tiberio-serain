@@ -15,3 +15,7 @@ List of planned features, bug fixes, and improvements for the TSP solver.
 - [x] TSPLIB parser.
 - [x] GNUplot visualization tool.
 - [x] High-precision timing.
+- [x] Standardize function documentation (Javadoc-style).
+- [x] Tag complex code sections for better readability (`//@COMPLEX@`).
+- [x] Document verbosity levels for easier debugging.
+- [x] Segment `main.c` into logical regions for better maintainability.

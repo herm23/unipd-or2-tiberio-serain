@@ -4,10 +4,59 @@
 
 #include <cplex.h>
 
+/**
+ * Verbosity levels (VERBOSE):
+ * - >= 1: Basic solving information (e.g., total time).
+ * - >= 2: Echoes command line arguments.
+ * - >= 10: Prints current parameters and instance details.
+ * - >= 100: Displays parser startup information.
+ * - >= 1000: Shows detailed input reading and final solution tour.
+ * - >= 2000: Prints raw input lines during parsing.
+ * - >= 3000: Displays tokenized parameter names during parsing.
+ */
 
-//region mainFunctions
+
+//region DECLARATIONS
+/**
+ * @brief Parses the command line arguments and populates the instance structure.
+ * 
+ * @param argc The number of command line arguments.
+ * @param argv The array of command line arguments.
+ * @param inst Pointer to the instance structure to be populated.
+ */
 void parse_command_line(int argc, char **argv, instance *inst);
 
+/**
+ * @brief Reads the input file and populates the instance structure.
+ * 
+ * @param inst Pointer to the instance structure to be populated.
+ */
+void read_input(instance *inst);
+
+//endregion DECLARATIONS
+
+
+//region UTILITIES
+/**
+ * @brief Prints an error message and terminates the program.
+ * 
+ * @param err The error message to be printed.
+ */
+void print_error(const char *err) {
+    printf("\n\n ERROR: %s \n\n", err);
+    fflush(NULL);
+    exit(1);
+}
+
+//endregion UTILITIES
+
+
+//region MEMORY MANAGEMENT
+/**
+ * @brief Frees the memory allocated for the instance.
+ * 
+ * @param inst Pointer to the instance structure to be freed.
+ */
 void free_instance(instance *inst) {
     // free(inst->demand);
     free(inst->xcoord);
@@ -16,17 +65,17 @@ void free_instance(instance *inst) {
     // free(inst->load_max);
 }
 
-void read_input(instance *inst);
-
-void print_error(const char *err) {
-    printf("\n\n ERROR: %s \n\n", err);
-    fflush(NULL);
-    exit(1);
-}
-
-//endregion mainFunctions
+//endregion MEMORY MANAGEMENT
 
 
+//region MAIN
+/**
+ * @brief The main entry point of the program.
+ * 
+ * @param argc The number of command line arguments.
+ * @param argv The array of command line arguments.
+ * @return int Returns 0 on success, 1 on error.
+ */
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf("Usage: %s -help for help\n", argv[0]);
@@ -52,6 +101,7 @@ int main(int argc, char **argv) {
     // printf("VALID\n");
 
     const short permutation_status = random_shuffle(solution, inst.nnodes);
+    //@COMPLEX@: Random shuffle is used to generate an initial solution for testing purposes.
     if (permutation_status != 0) {
         free(solution);
         free_instance(&inst);
@@ -101,6 +151,17 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+//endregion MAIN
+
+
+//region PARSER
+/**
+ * @brief Implementation of the command line parser.
+ * 
+ * @param argc The number of command line arguments.
+ * @param argv The array of command line arguments.
+ * @param inst Pointer to the instance structure to be populated.
+ */
 void parse_command_line(int argc, char **argv, instance *inst) {
     if (VERBOSE >= 100) printf(" running %s with %d parameters \n", argv[0], argc - 1);
 
@@ -121,6 +182,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
 
     int help = 0;
     if (argc < 1) help = 1;
+    //@COMPLEX@: Command line parser uses a simple loop to match flags and store values in the instance structure.
     for (int i = 1; i < argc; i++) {
         //region INPUT FILE
         if (strcmp(argv[i], "-file") == 0) {
@@ -213,7 +275,15 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     if (help) exit(1);
 }
 
+//endregion PARSER
 
+
+//region INPUT READER
+/**
+ * @brief Implementation of the input reader.
+ * 
+ * @param inst Pointer to the instance structure to be populated.
+ */
 void read_input(instance *inst) {
     FILE *fin = fopen(inst->input_file, "r");
     if (fin == NULL) print_error(" input file not found!");
@@ -231,6 +301,7 @@ void read_input(instance *inst) {
 
     int do_print = (VERBOSE >= 1000);
 
+    //@COMPLEX@: The input reader is a simple TSPLIB parser that handles limited keywords and coordinates.
     while (fgets(line, sizeof(line), fin) != NULL) {
         if (VERBOSE >= 2000) {
             printf("%s", line);
@@ -303,6 +374,7 @@ void read_input(instance *inst) {
         if (active_section == 1) // within NODE_COORD_SECTION
         {
             int i = atoi(par_name) - 1;
+            //@COMPLEX@: Converts 1-based node index from file to 0-based array index and parses coordinates.
             if (i < 0 || i >= inst->nnodes) print_error(" ... unknown node in NODE_COORD_SECTION section");
             token1 = strtok(NULL, " :,");
             token2 = strtok(NULL, " :,");
@@ -320,3 +392,5 @@ void read_input(instance *inst) {
 
     fclose(fin);
 }
+
+//endregion INPUT READER

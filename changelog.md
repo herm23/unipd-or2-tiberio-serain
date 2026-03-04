@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-03-04
+### Added
+- Javadoc-style documentation for all functions in `main.c`, `tsp.c`, and `tsp.h`.
+- Detailed verbosity level descriptions at the top of `main.c`.
+- `//@COMPLEX@` tags to highlight and explain complex algorithmic sections.
+- Logical segmentation of `main.c` using IDE-compatible `#region` tags.
+
+### Changed
+- Standardized function documentation with `@brief`, `@param`, and `@return` tags.
+- Organized `main.c` declarations and implementations into distinct regions (PARSER, INPUT READER, etc.).
+
 ## [0.2.1] - 2026-03-01
 ### Fixed
 - Fixed memory management in `free_instance` by commenting out unallocated memory `free` calls.

@@ -5,11 +5,19 @@
 #define pclose _pclose
 #endif
 
+/**
+ * @brief Shuffles an array of unsigned integers randomly using the Fisher-Yates algorithm.
+ * 
+ * @param array The array to be shuffled.
+ * @param N The number of elements in the array.
+ * @return short Returns 0 on success, -1 if memory allocation fails.
+ */
 short random_shuffle(unsigned int *array, const unsigned int N) {
     //Return 0 = ok
     if (N <= 1) return -1;
 
     for (unsigned int i = N - 1; i > 0; --i) {
+        //@COMPLEX@: Fisher-Yates shuffle algorithm: swaps the current element with a random one from the remaining pool.
         size_t j = rand() % (i + 1); //Sarebbe da usare una cosa più robusta di rand, ma per questo prototipo ok
 
         const unsigned int tmp = array[i];
@@ -21,6 +29,12 @@ short random_shuffle(unsigned int *array, const unsigned int N) {
 }
 
 
+/**
+ * @brief Initializes a solution array with an identity mapping (0, 1, 2, ..., N-1).
+ * 
+ * @param N The number of nodes in the solution.
+ * @return unsigned int* Pointer to the newly allocated and initialized solution array.
+ */
 unsigned int *initialize_solution(const unsigned int N) {
     //Keeping all unsigned (all indexes are positive)
     unsigned int *solution = malloc(N * sizeof(unsigned int));
@@ -32,6 +46,13 @@ unsigned int *initialize_solution(const unsigned int N) {
     return solution;
 }
 
+/**
+ * @brief Plots the tour using gnuplot by generating data and command files.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param solution The solution array representing the tour.
+ * @param only_instance Flag to plot only the instance nodes without the tour edges.
+ */
 void plot_tour(const instance *inst, const unsigned int *solution, int only_instance) {
     /* ----------- Basic error checking ----------- */
     if (inst == NULL) {
@@ -55,6 +76,7 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
     }
 
     /* ----------- Open gnuplot pipe ----------- */
+    //@COMPLEX@: Opens a persistent pipe to gnuplot for visualization. This requires gnuplot to be installed and in the system PATH.
     FILE *gp = popen("gnuplot -persistent", "w");
     if (gp == NULL) {
         perror("plot_tour error: popen failed");
@@ -122,6 +144,13 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
 }
 
 
+/**
+ * @brief Checks if a solution represents a valid Hamiltonian tour (cycle).
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param solution The solution array to be checked.
+ * @return short Returns 0 if valid, -1 if invalid or if memory allocation fails.
+ */
 short check_tour(const instance *inst, const unsigned int *solution) {
     //Return 0 if valid, -1 otherways
     if (inst == NULL || solution == NULL) return -1;
@@ -136,6 +165,7 @@ short check_tour(const instance *inst, const unsigned int *solution) {
     for (unsigned int i = 0; i < N; ++i) {
         unsigned int node = solution[i];
 
+        //@COMPLEX@: Validates a Hamiltonian cycle by ensuring each node is visited exactly once using a bit/byte-set.
         if (node >= N || visited[node]) {
             //we can do only a single pass like this  if we know the range of elements
             free(visited);
@@ -150,6 +180,14 @@ short check_tour(const instance *inst, const unsigned int *solution) {
 }
 
 
+/**
+ * @brief Calculates the distance between two nodes based on the instance's edge weight type.
+ * 
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @param inst Pointer to the instance structure.
+ * @return double The calculated distance between node i and node j.
+ */
 double dist(unsigned int i, unsigned int j, instance *inst) {
     double dx = inst->xcoord[i] - inst->xcoord[j];
     double dy = inst->ycoord[i] - inst->ycoord[j];
@@ -158,6 +196,13 @@ double dist(unsigned int i, unsigned int j, instance *inst) {
     return dis + 0.0;
 }
 
+/**
+ * @brief Calculates the total cost of a given tour.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param sol The solution array representing the tour.
+ * @return double The total cost of the tour.
+ */
 static double tour_cost(instance *inst, unsigned int *sol) {
     double cost = 0.0;
     int N = inst->nnodes;
@@ -171,6 +216,13 @@ static double tour_cost(instance *inst, unsigned int *sol) {
 
 
 // Helper per controllo errori CPLEX
+/**
+ * @brief Helper function to check CPLEX operation status and handle errors.
+ * 
+ * @param status The status code returned by a CPLEX function.
+ * @param env The CPLEX environment pointer.
+ * @param where A string describing where the error occurred.
+ */
 static void cpx_check(int status, CPXENVptr env, const char *where) {
     if (status) {
         char errmsg[1024];
@@ -181,6 +233,12 @@ static void cpx_check(int status, CPXENVptr env, const char *where) {
 }
 
 
+/**
+ * @brief Solves the TSP problem to optimality using CPLEX and the MTZ formulation.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param sol Pointer to the solution array to be populated with the optimal tour.
+ */
 void TSPopt(instance *inst, unsigned int *sol) {
     const int n = inst->nnodes;
     if (n <= 1) {
@@ -269,12 +327,12 @@ void TSPopt(instance *inst, unsigned int *sol) {
         rmatbeg[0] = 0;
 
         status = CPXaddrows(env, lp,
-                            0,           // nessuna nuova colonna
-                            1,           // una riga
-                            cnt,         // numero di coefficienti
+                            0, // nessuna nuova colonna
+                            1, // una riga
+                            cnt, // numero di coefficienti
                             &rhs,
                             &sense,
-                            rmatbeg,     // ← NON NULL
+                            rmatbeg, // ← NON NULL
                             ind,
                             val,
                             NULL,
@@ -308,12 +366,12 @@ void TSPopt(instance *inst, unsigned int *sol) {
         rmatbeg[0] = 0;
 
         status = CPXaddrows(env, lp,
-                            0,           // nessuna nuova colonna
-                            1,           // una riga
-                            cnt,         // numero di coefficienti
+                            0, // nessuna nuova colonna
+                            1, // una riga
+                            cnt, // numero di coefficienti
                             &rhs,
                             &sense,
-                            rmatbeg,     // ← NON NULL
+                            rmatbeg, // ← NON NULL
                             ind,
                             val,
                             NULL,
@@ -327,6 +385,7 @@ void TSPopt(instance *inst, unsigned int *sol) {
     // --- MTZ ---
     // Per i != j, i>=1, j>=1:
     // u_i - u_j + n x_{i,j} <= n-1
+    //@COMPLEX@: Implementation of Miller-Tucker-Zemlin (MTZ) constraints to eliminate subtours in the TSP formulation.
     for (int i = 1; i < n; i++) {
         for (int j = 1; j < n; j++) {
             if (i == j) continue;
@@ -429,6 +488,7 @@ void TSPopt(instance *inst, unsigned int *sol) {
     }
 
     // --- Ricostruzione tour da 0 ---
+    //@COMPLEX@: Iteratively follows the 'successor' pointers from node 0 to reconstruct the Hamiltonian cycle from the CPLEX solution.
     for (int i = 0; i < n; i++) sol[i] = (unsigned int) -1;
 
     int *visited = (int *) calloc(n, sizeof(int));

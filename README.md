@@ -64,9 +64,16 @@ The executable accepts several command-line arguments to control the optimizatio
 
 ## Project Structure
 
-- `main.c`: Entry point, handles command-line parsing and high-level execution flow.
+- `main.c`: Entry point, handles command-line parsing and high-level execution flow. Segmented into regions (MAIN, PARSER, etc.) with detailed verbosity level documentation.
 - `tsp.c` / `tsp.h`: Core TSP logic, data structures, and CPLEX model implementations.
 - `chrono.c` / `chrono.h`: Utility functions for precise timing and performance measurement.
+
+### Code Style & Documentation
+The codebase adheres to the following standards:
+- **Javadoc-style comments**: Each function includes `@brief`, `@param`, and `@return` tags for clear interface documentation.
+- **Complex logic tagging**: Sections with non-trivial implementation details are marked with `//@COMPLEX@: <explanation>` to assist in code review and maintenance.
+- **Region segmentation**: Logical groups of functions and definitions are enclosed in `#region` and `#endregion` tags for improved IDE navigation.
+
 - `att48.tsp`: Sample TSP instance (48 cities in the US).
 - `prompts/`: Contains documentation regarding prompt engineering used during development.
 - `plot/`: Data and commands for GNUplot visualization.
