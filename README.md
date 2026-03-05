@@ -9,9 +9,9 @@ The project implements various mathematical models and heuristics to solve the T
 ## Requirements
 
 ### Software
-- **C Compiler**: A C11-compliant compiler (e.g., GCC/MinGW, MSVC).
+- **C Compiler**: A C11-compliant compiler (e.g., GCC/MinGW, MSVC, Clang).
 - **CMake**: Version 4.0 or higher.
-- **IBM ILOG CPLEX Studio**: The project is configured for version 22.1.2. Ensure the `CPLEX_ROOT` path in `CMakeLists.txt` matches your installation directory.
+- **IBM ILOG CPLEX Studio**: The project is configured for version 22.1.2. Ensure the `CPLEX_ROOT` path in `CMakeLists.txt` matches your installation directory. Support is available for both Linux and macOS (Apple Silicon).
 - **GNUplot**: Optional, required for solution visualization (`plot_tour`).
 
 ### Environment Variables
@@ -26,16 +26,27 @@ The project implements various mathematical models and heuristics to solve the T
    ```
 
 2. **Configure CPLEX path**:
-   Open `CMakeLists.txt` and verify the `CPLEX_ROOT` variable:
+   You can either modify the `CPLEX_ROOT` variable in `CMakeLists.txt`:
    ```cmake
    set(CPLEX_ROOT "C:\\Program Files\\IBM\\ILOG\\CPLEX_Studio_Community2212")
+   ```
+   Or, more conveniently, provide it as a CMake variable during configuration:
+   ```powershell
+   cmake -DCPLEX_ROOT="/path/to/your/CPLEX_Studio2212" ..
    ```
 
 3. **Build the project using CMake**:
    ```powershell
+   # On macOS/Linux
    mkdir build
    cd build
-   cmake ..
+   cmake -DCPLEX_ROOT="~/Applications/CPLEX_Studio2212" ..
+   cmake --build . --target unipd_or2_tiberio_serain
+
+   # On Windows
+   mkdir build
+   cd build
+   cmake -DCPLEX_ROOT="C:\Program Files\IBM\ILOG\CPLEX_Studio2212" ..
    cmake --build . --target unipd_or2_tiberio_serain --config Debug
    ```
 

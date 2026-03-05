@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
     plot_tour(&inst, solution, 1);
     plot_tour(&inst, solution, 0);
 
-    // TSPopt(&inst, solution);
+    TSPopt(&inst, solution);
 
     plot_tour(&inst, solution, 0);
 
@@ -173,8 +173,8 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     inst->num_threads = 0;
     inst->timelimit = CPX_INFBOUND; //USARE QUESTI
     inst->cutoff = CPX_INFBOUND;
-    // inst->timelimit = 1e10;
-    // inst->cutoff = 1e10;
+    //inst->timelimit = 1e10;
+    //inst->cutoff = 1e10;
     inst->integer_costs = 0;
 
     inst->available_memory = 12000; // available memory, in MB, for Cplex execution (e.g., 12000)

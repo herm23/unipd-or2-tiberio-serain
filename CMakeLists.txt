@@ -36,7 +36,7 @@ if(CPLEX_ROOT)
     endif()
 
     # LINUX
-    if(UNIX)
+    if(UNIX AND NOT APPLE)
 
         target_link_directories(unipd_or2_tiberio_serain PRIVATE
                 ${CPLEX_ROOT}/cplex/lib/x86-64_linux/static_pic
@@ -48,6 +48,22 @@ if(CPLEX_ROOT)
                 pthread
                 m
                 dl
+        )
+
+    endif()
+
+    # macOS
+    if(APPLE)
+
+        target_link_directories(unipd_or2_tiberio_serain PRIVATE
+                ${CPLEX_ROOT}/cplex/lib/arm64_osx/static_pic
+        )
+
+        target_link_libraries(unipd_or2_tiberio_serain PRIVATE
+                cplex
+                ilocplex
+                pthread
+                m
         )
 
     endif()

@@ -215,6 +215,7 @@ static double tour_cost(instance *inst, unsigned int *sol) {
 }
 
 
+
 // Helper per controllo errori CPLEX
 /**
  * @brief Helper function to check CPLEX operation status and handle errors.
@@ -222,7 +223,7 @@ static double tour_cost(instance *inst, unsigned int *sol) {
  * @param status The status code returned by a CPLEX function.
  * @param env The CPLEX environment pointer.
  * @param where A string describing where the error occurred.
- */
+**/
 static void cpx_check(int status, CPXENVptr env, const char *where) {
     if (status) {
         char errmsg[1024];
@@ -238,7 +239,7 @@ static void cpx_check(int status, CPXENVptr env, const char *where) {
  * 
  * @param inst Pointer to the instance structure.
  * @param sol Pointer to the solution array to be populated with the optimal tour.
- */
+ **/
 void TSPopt(instance *inst, unsigned int *sol) {
     const int n = inst->nnodes;
     if (n <= 1) {
@@ -540,3 +541,4 @@ void TSPopt(instance *inst, unsigned int *sol) {
     CPXfreeprob(env, &lp);
     CPXcloseCPLEX(&env);
 }
+
