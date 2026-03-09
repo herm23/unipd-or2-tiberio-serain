@@ -1,7 +1,6 @@
 #include <stdio.h>
-#include "tsp.h"
-#include "chrono.h"
-
+#include "./headers/tsp.h"
+#include "./headers/chrono.h"
 #include <cplex.h>
 
 /**

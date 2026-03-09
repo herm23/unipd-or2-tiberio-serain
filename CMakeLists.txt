@@ -5,8 +5,8 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(unipd_or2_tiberio_serain
         main.c
-        tsp.c
-        chrono.c
+        src/tsp.c
+        src/chrono.c
 )
 
 # Path CPLEX configurabile

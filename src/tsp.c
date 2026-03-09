@@ -1,4 +1,4 @@
-#include "tsp.h"
+#include "./../headers/tsp.h"
 
 #ifdef _WIN32
 #define popen _popen
