@@ -35,14 +35,14 @@ int main(int argc, char **argv) {
     // }
     // printf("VALID\n");
 
-    const short permutation_status = random_shuffle(solution, inst.nnodes);
-    //@COMPLEX@: Random shuffle is used to generate an initial solution for testing purposes.
-    if (permutation_status != 0) {
-        free(solution);
-        free_instance(&inst);
-        print_error("Error while calculating random permutation!");
-        return 1;
-    }
+    // const short permutation_status = random_shuffle(solution, inst.nnodes);
+    // //@COMPLEX@: Random shuffle is used to generate an initial solution for testing purposes.
+    // if (permutation_status != 0) {
+    //     free(solution);
+    //     free_instance(&inst);
+    //     print_error("Error while calculating random permutation!");
+    //     return 1;
+    // }
 
     short check_solution = check_tour(&inst, solution);
     if (check_solution != 0) {

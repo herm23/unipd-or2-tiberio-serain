@@ -1,11 +1,9 @@
-//TODO: Organize the directories and files in the correct way by also checking the CMakeLists.txt !!!
 //TODO: Check:_tour must provide a cost of the solution that must be consistent.
 //TODO: In the command line you have to provide the time limit. 
 //  (When you implement the function you have to compare the current time with the time limit provided)
 //  (To do tihs you have to store the starting time that must be internal to the instance (check this istance what it is))
 //  (At the end of the function you must compare the actual time computed with the time limit provided)
 //  In every function that perform a long computation you most do this comparison between the time limit and the actual computed time
-//  NOTE: The incombent musst be implemented by a single function
 
 // NOTE: To compare 2 double numbers the best way is to compare the abs difference between the 2 numbers with an epsilon that you have defined
 

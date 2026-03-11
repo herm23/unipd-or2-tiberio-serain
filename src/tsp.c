@@ -525,25 +525,25 @@ void tspNN(instance *inst, unsigned int *sol){
 
     swap(&sol[0], &sol[node_index], sizeof(int));
 
-    double minDist = -1;
+    double minDist = -1.0;
     double tmpDist = -1;
     int pointIndex = -1;
 
     //NOTE: The last 2 are already positioned
-    for(unsigned int i = 1; i < nodes - 2; i++)
+    for(unsigned int i = 0; i < nodes - 2; i++)
     {
-        for(unsigned int j = i+1; j < nodes - 2; j++)
+        for(unsigned int j = i+1; j < nodes; j++)
         {
-            tmpDist = distSquared(i, j, inst);
-            if(tmpDist < minDist)
+            tmpDist = distSquared(sol[i], sol[j], inst);
+            if(minDist == -1 || tmpDist < minDist)
             {
                 minDist = tmpDist;
                 pointIndex = j;
             }
         }
 
-        swap(&sol[i], &sol[pointIndex], sizeof(int));
-        minDist = -1;
+        swap(&sol[i+1], &sol[pointIndex], sizeof(int));
+        minDist = -1.0;
         pointIndex = -1;
     }
 }
