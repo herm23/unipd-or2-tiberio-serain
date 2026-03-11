@@ -9,14 +9,6 @@
 
 // NOTE: To compare 2 double numbers the best way is to compare the abs difference between the 2 numbers with an epsilon that you have defined
 
-//TODO: We have to implement the TSP solution with the NN heuristics approach. 
-//(On input you must provide the starting nodes sequence.)
-//Steps:
-//Init a vector with the all nodes
-//Chose the starting node at random by performing the swap with (first node in the vector and actual chosen first node)
-//Chose the next node based on the lowest cost from the first visited node and all the other nodes
-//Iterate this procedure until you have visited the all nodes
-
 //NOTE: If you see that you encounter a time limit while you are computing the solution you can:
 //  randomize with swaps a given istance, to start from different nodes to make different trials to avoid the time limit
 //  if you have already a random solution than it's enough.

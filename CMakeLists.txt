@@ -7,6 +7,7 @@ add_executable(unipd_or2_tiberio_serain
         main.c
         src/tsp.c
         src/chrono.c
+        src/utils.c
 )
 
 # Path CPLEX configurabile

@@ -542,3 +542,18 @@ void TSPopt(instance *inst, unsigned int *sol) {
     CPXcloseCPLEX(&env);
 }
 
+//TODO: We have to implement the TSP solution with the NN heuristics approach. 
+//(On input you must provide the starting nodes sequence.)
+//Steps:
+//Init a vector with the all nodes
+//Chose the starting node at random by performing the swap with (first node in the vector and actual chosen first node)
+//Chose the next node based on the lowest cost from the first visited node and all the other nodes
+//Iterate this procedure until you have visited the all nodes
+
+void tspNN(instance *inst, unsigned int *sol){
+    const int nodes = inst->nnodes;
+
+    //NOTE: Init starting random node
+    int node_index = rand() % nodes;
+}
+

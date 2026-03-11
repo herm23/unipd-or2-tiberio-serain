@@ -1,0 +1,3 @@
+Usefull commands to debug.
+Comands for the debug console:
+    -exec p (char*)argv[i] (Substitute argv[i], with the char that you want to debug)
