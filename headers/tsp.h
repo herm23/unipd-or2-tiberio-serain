@@ -37,5 +37,7 @@ short check_tour(const instance *inst, const unsigned int *solution);
  */
 void TSPopt(instance *inst, unsigned int *sol);
 
+void tspNN(instance *inst, unsigned int *sol);
+
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H

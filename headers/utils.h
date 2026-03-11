@@ -96,10 +96,8 @@ short random_shuffle(unsigned int *array, unsigned int N);
  */
 unsigned int *initialize_solution(unsigned int N);
 
+void swap(void *a, void *b, size_t size);
 
-//NOTE: Methods
-
-//region DECLARATIONS
 /**
  * @brief Parses the command line arguments and populates the instance structure.
  * 
@@ -116,9 +114,8 @@ void parse_command_line(int argc, char **argv, instance *inst);
  */
 void read_input(instance *inst);
 
-//endregion DECLARATIONS
-
 void print_error(const char *err);
 void free_instance(instance *inst);
+void print_array(int *array, int size);
 
 #endif

@@ -6,47 +6,6 @@
 #endif
 
 /**
- * @brief Shuffles an array of unsigned integers randomly using the Fisher-Yates algorithm.
- * 
- * @param array The array to be shuffled.
- * @param N The number of elements in the array.
- * @return short Returns 0 on success, -1 if memory allocation fails.
- */
-short random_shuffle(unsigned int *array, const unsigned int N) {
-    //Return 0 = ok
-    if (N <= 1) return -1;
-
-    for (unsigned int i = N - 1; i > 0; --i) {
-        //@COMPLEX@: Fisher-Yates shuffle algorithm: swaps the current element with a random one from the remaining pool.
-        size_t j = rand() % (i + 1); //Sarebbe da usare una cosa più robusta di rand, ma per questo prototipo ok
-
-        const unsigned int tmp = array[i];
-        array[i] = array[j];
-        array[j] = tmp;
-    }
-
-    return 0;
-}
-
-
-/**
- * @brief Initializes a solution array with an identity mapping (0, 1, 2, ..., N-1).
- * 
- * @param N The number of nodes in the solution.
- * @return unsigned int* Pointer to the newly allocated and initialized solution array.
- */
-unsigned int *initialize_solution(const unsigned int N) {
-    //Keeping all unsigned (all indexes are positive)
-    unsigned int *solution = malloc(N * sizeof(unsigned int));
-    if (!solution) return NULL;
-
-    for (unsigned int i = 0; i < N; ++i) {
-        solution[i] = i;
-    }
-    return solution;
-}
-
-/**
  * @brief Plots the tour using gnuplot by generating data and command files.
  * 
  * @param inst Pointer to the instance structure.
@@ -193,6 +152,14 @@ double dist(unsigned int i, unsigned int j, instance *inst) {
     double dy = inst->ycoord[i] - inst->ycoord[j];
     if (!inst->integer_costs) return sqrt(dx * dx + dy * dy);
     int dis = sqrt(dx * dx + dy * dy) + 0.499999999; // nearest integer
+    return dis + 0.0;
+}
+
+double distSquared(unsigned int i, unsigned int j, instance *inst) {
+    double dx = inst->xcoord[i] - inst->xcoord[j];
+    double dy = inst->ycoord[i] - inst->ycoord[j]; 
+    if (!inst->integer_costs) return (dx * dx + dy * dy);
+    int dis = (dx * dx + dy * dy) + 0.499999999; // nearest integer
     return dis + 0.0;
 }
 
@@ -555,5 +522,29 @@ void tspNN(instance *inst, unsigned int *sol){
 
     //NOTE: Init starting random node
     int node_index = rand() % nodes;
+
+    swap(&sol[0], &sol[node_index], sizeof(int));
+
+    double minDist = -1;
+    double tmpDist = -1;
+    int pointIndex = -1;
+
+    //NOTE: The last 2 are already positioned
+    for(unsigned int i = 1; i < nodes - 2; i++)
+    {
+        for(unsigned int j = i+1; j < nodes - 2; j++)
+        {
+            tmpDist = distSquared(i, j, inst);
+            if(tmpDist < minDist)
+            {
+                minDist = tmpDist;
+                pointIndex = j;
+            }
+        }
+
+        swap(&sol[i], &sol[pointIndex], sizeof(int));
+        minDist = -1;
+        pointIndex = -1;
+    }
 }
 

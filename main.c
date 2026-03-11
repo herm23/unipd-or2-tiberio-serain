@@ -55,7 +55,10 @@ int main(int argc, char **argv) {
     plot_tour(&inst, solution, 1);
     plot_tour(&inst, solution, 0);
 
-    TSPopt(&inst, solution);
+    //TODO: Gestire con enumeratore da riga di comando
+    
+    //TSPopt(&inst, solution);
+    tspNN(&inst, solution);
 
     plot_tour(&inst, solution, 0);
 

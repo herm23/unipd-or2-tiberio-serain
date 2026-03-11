@@ -1,6 +1,7 @@
 #include "./../headers/utils.h"
 #include "./../headers/consts.h"
 
+//region UTILITY
 /**
  * @brief Prints an error message and terminates the program.
  * 
@@ -11,6 +12,68 @@ void print_error(const char *err) {
     fflush(NULL);
     exit(1);
 }
+
+void print_array(int *array, int size) {
+    printf("[");
+    for (int i = 0; i < size; i++) {
+        printf("%d", array[i]);
+        
+        // Aggiungi una virgola tra gli elementi, ma non dopo l'ultimo
+        if (i < size - 1) {
+            printf(", ");
+        }
+    }
+    printf("]\n");
+}
+
+/**
+ * @brief Shuffles an array of unsigned integers randomly using the Fisher-Yates algorithm.
+ * 
+ * @param array The array to be shuffled.
+ * @param N The number of elements in the array.
+ * @return short Returns 0 on success, -1 if memory allocation fails.
+ */
+short random_shuffle(unsigned int *array, const unsigned int N) {
+    //Return 0 = ok
+    if (N <= 1) return -1;
+
+    for (unsigned int i = N - 1; i > 0; --i) {
+        //@COMPLEX@: Fisher-Yates shuffle algorithm: swaps the current element with a random one from the remaining pool.
+        size_t j = rand() % (i + 1); //Sarebbe da usare una cosa più robusta di rand, ma per questo prototipo ok
+        swap(&array[i], &array[j], sizeof(int));
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Initializes a solution array with an identity mapping (0, 1, 2, ..., N-1).
+ * 
+ * @param N The number of nodes in the solution.
+ * @return unsigned int* Pointer to the newly allocated and initialized solution array.
+ */
+unsigned int *initialize_solution(const unsigned int N) {
+    //Keeping all unsigned (all indexes are positive)
+    unsigned int *solution = malloc(N * sizeof(unsigned int));
+    if (!solution) return NULL;
+
+    for (unsigned int i = 0; i < N; ++i) {
+        solution[i] = i;
+    }
+    return solution;
+}
+
+void swap(void *a, void *b, size_t size) {
+    // Alloca un buffer temporaneo della dimensione corretta
+    void *tmp = malloc(size);
+    
+    memcpy(tmp, a, size);
+    memcpy(a, b, size);
+    memcpy(b, tmp, size);
+    
+    free(tmp);
+}
+//endregion UTILITY
 
 //region MEMORY MANAGEMENT
 /**
