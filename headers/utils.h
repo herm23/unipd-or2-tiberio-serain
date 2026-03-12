@@ -6,7 +6,7 @@
 #include <string.h>
 #include <cplex.h>
 
-
+//TODO: Check used variables
 typedef struct {
     int nnodes;
     double *demand;
@@ -17,9 +17,10 @@ typedef struct {
     int nveh;
 
     // parameters
+    //NOTE: The fields randomseed and num_nodes must be used togheter
+    int randomseed;
     int model_type;
     int old_benders;
-    int randomseed;
     int num_threads;
     double timelimit; // overall time limit, in sec.s
     char input_file[1000]; // input file

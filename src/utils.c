@@ -122,24 +122,34 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     //@COMPLEX@: Command line parser uses a simple loop to match flags and store values in the instance structure.
     for (int i = 1; i < argc; i++) {
         //region INPUT FILE
-        if (strcmp(argv[i], "-file") == 0) {
+        if(
+            (strcmp(argv[i], "-file") == 0) || 
+            (strcmp(argv[i], "-input") == 0) ||
+            (strcmp(argv[i], "-f") == 0)
+        )
+        {
             strcpy(inst->input_file, argv[++i]);
             continue;
-        } // input file
-        if (strcmp(argv[i], "-input") == 0) {
-            strcpy(inst->input_file, argv[++i]);
-            continue;
-        } // input file
-        if (strcmp(argv[i], "-f") == 0) {
-            strcpy(inst->input_file, argv[++i]);
-            continue;
-        } // input file
+        } 
         //endregion INPUT FILE
+
+        //region RANDOM INSTANCE
+        if (strcmp(argv[i], "-seed") == 0) {
+            inst->randomseed = abs(atoi(argv[++i]));
+            continue;
+        } // random seed
+        
+        if(strcmp(argv[i], "-nodes_count") == 0){
+            inst->nnodes = abs(atoi(argv[++i]));
+            continue;
+        }
+        //endregion RANDOM INSTANCE
 
         if (strcmp(argv[i], "-time_limit") == 0) {
             inst->timelimit = atof(argv[++i]);
             continue;
         } // total time limit
+
         if (strcmp(argv[i], "-model_type") == 0) {
             inst->model_type = atoi(argv[++i]);
             continue;
@@ -152,10 +162,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->model_type = atoi(argv[++i]);
             continue;
         } // model type
-        if (strcmp(argv[i], "-seed") == 0) {
-            inst->randomseed = abs(atoi(argv[++i]));
-            continue;
-        } // random seed
+        
         if (strcmp(argv[i], "-threads") == 0) {
             inst->num_threads = atoi(argv[++i]);
             continue;
@@ -180,11 +187,8 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->integer_costs = 1;
             continue;
         } // inteher costs
-        if (strcmp(argv[i], "-help") == 0) {
-            help = 1;
-            continue;
-        } // help
-        if (strcmp(argv[i], "--help") == 0) {
+        if ((strcmp(argv[i], "-help") == 0) || strcmp(argv[i], "--help") == 0)
+        {
             help = 1;
             continue;
         } // help
@@ -211,7 +215,6 @@ void parse_command_line(int argc, char **argv, instance *inst) {
 
     if (help) exit(1);
 }
-
 //endregion PARSER
 
 
@@ -221,9 +224,16 @@ void parse_command_line(int argc, char **argv, instance *inst) {
  * 
  * @param inst Pointer to the instance structure to be populated.
  */
+
+//WARNING: Does it makes sense to print_error and exit program ?
 void read_input(instance *inst) {
+    
+    //TODO: Implement here the possibility of generating the random instance
     FILE *fin = fopen(inst->input_file, "r");
-    if (fin == NULL) print_error(" input file not found!");
+    if (fin == NULL) 
+    {
+        print_error(" input file not found!");
+    }
 
     inst->nnodes = -1;
     inst->depot = -1;

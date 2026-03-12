@@ -1,3 +1,5 @@
+//TODO: Organize the code in the best way possibile (You must be able to explain everything)
+
 //TODO: Check:_tour must provide a cost of the solution that must be consistent.
 //TODO: In the command line you have to provide the time limit. 
 //  (When you implement the function you have to compare the current time with the time limit provided)

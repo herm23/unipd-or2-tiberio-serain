@@ -12,6 +12,8 @@
  * @return int Returns 0 on success, 1 on error.
  */
 int main(int argc, char **argv) {
+
+    //NOTE: No parameteres included
     if (argc < 2) {
         printf("Usage: %s -help for help\n", argv[0]);
         exit(1);
@@ -24,9 +26,11 @@ int main(int argc, char **argv) {
     double t1 = second();
     instance inst;
 
+    //NOTE: Managing input
     parse_command_line(argc, argv, &inst);
     read_input(&inst);
 
+    //NOTE: Init Computation
     unsigned int *solution = initialize_solution(inst.nnodes);
 
     // printf("Initialized identity solution is ");
