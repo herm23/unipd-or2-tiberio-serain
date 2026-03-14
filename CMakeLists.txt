@@ -13,7 +13,7 @@ add_executable(unipd_or2_tiberio_serain
 # Path CPLEX configurabile
 set(CPLEX_ROOT "" CACHE PATH "Path to CPLEX installation")
 
-if(CPLEX_ROOT)
+if (CPLEX_ROOT)
 
     target_include_directories(unipd_or2_tiberio_serain PRIVATE
             ${CPLEX_ROOT}/cplex/include
@@ -23,7 +23,7 @@ if(CPLEX_ROOT)
     target_compile_definitions(unipd_or2_tiberio_serain PRIVATE IL_STD)
 
     # WINDOWS
-    if(WIN32)
+    if (WIN32)
 
         target_link_directories(unipd_or2_tiberio_serain PRIVATE
                 ${CPLEX_ROOT}/cplex/lib/x64_windows_msvc14/stat_mda
@@ -34,10 +34,10 @@ if(CPLEX_ROOT)
                 ilocplex
         )
 
-    endif()
+    endif ()
 
     # LINUX
-    if(UNIX AND NOT APPLE)
+    if (UNIX AND NOT APPLE)
 
         target_link_directories(unipd_or2_tiberio_serain PRIVATE
                 ${CPLEX_ROOT}/cplex/lib/x86-64_linux/static_pic
@@ -51,10 +51,10 @@ if(CPLEX_ROOT)
                 dl
         )
 
-    endif()
+    endif ()
 
     # macOS
-    if(APPLE)
+    if (APPLE)
 
         target_link_directories(unipd_or2_tiberio_serain PRIVATE
                 ${CPLEX_ROOT}/cplex/lib/arm64_osx/static_pic
@@ -67,6 +67,6 @@ if(CPLEX_ROOT)
                 m
         )
 
-    endif()
+    endif ()
 
-endif()
+endif ()

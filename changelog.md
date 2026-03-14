@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-15
+### Added
+- Standardized Javadoc-style documentation (`@brief`, `@param`, `@return`) across all project files (`main.c`, `tsp.c/h`, `chrono.c/h`, `utils.c/h`).
+- Logical code segmentation using `#region` blocks in `main.c`, `utils.c/h`, and `tsp.c/h` for enhanced IDE navigation.
+- Implementation of `//@COMPLEX@` tags to document and explain intricate algorithmic sections and data structures.
+- Detailed verbosity level guide in `headers/consts.h` and at the top of `main.c`.
+- `init_distances` function in `utils.c` for pre-calculating the distance matrix.
+- `random_shuffle` and `initialize_solution` utilities for stochastic and initial tour generation.
+
+### Changed
+- Moved core utility functions to `src/utils.c` and `headers/utils.h`.
+- Refined the TSPLIB parser to be more robust and provide detailed logging based on verbosity levels.
+- Updated `README.md` with comprehensive build instructions and documentation standards.
+- Updated `todo.md` to reflect the completion of the documentation and refactoring phase.
+
 ## [0.2.3] - 2026-03-05
 ### Added
 - Native support for Apple Silicon (macOS) in `CMakeLists.txt` for IBM CPLEX.

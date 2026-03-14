@@ -1,4 +1,6 @@
 #include "./../headers/utils.h"
+
+#include "../headers/tsp.h"
 #include "./../headers/consts.h"
 
 //region UTILITY
@@ -7,26 +9,43 @@
  * 
  * @param err The error message to be printed.
  */
-
- //TODO: Refactor
 void print_error(const char *err) {
     printf("\n\n ERROR: %s \n\n", err);
     fflush(NULL);
     exit(1);
 }
 
-//NOTE: Debug
+/**
+ * @brief Prints the elements of an integer array.
+ * 
+ * @param array The array to be printed.
+ * @param size The number of elements in the array.
+ */
 void print_array(int *array, int size) {
     printf("[");
     for (int i = 0; i < size; i++) {
         printf("%d", array[i]);
-        
+
         // Aggiungi una virgola tra gli elementi, ma non dopo l'ultimo
         if (i < size - 1) {
             printf(", ");
         }
     }
     printf("]\n");
+}
+
+/**
+ * @brief Initializes the distance matrix for the instance.
+ * 
+ * @param inst Pointer to the instance structure.
+ */
+void init_distances(instance *inst) {
+    inst->distances = malloc(inst->nnodes * inst->nnodes * sizeof(double));
+    for (int i = 0; i < inst->nnodes; i++) {
+        for (int j = i + 1; j < inst->nnodes; j++) {
+            setDistance(i, j, inst, dist(i, j, inst));
+        }
+    }
 }
 
 /**
@@ -65,16 +84,24 @@ unsigned int *initialize_solution(const unsigned int N) {
     return solution;
 }
 
+/**
+ * @brief Generic swap function for two elements of a given size.
+ * 
+ * @param a Pointer to the first element.
+ * @param b Pointer to the second element.
+ * @param size Size of the elements to be swapped.
+ */
 void swap(void *a, void *b, size_t size) {
     // Alloca un buffer temporaneo della dimensione corretta
     void *tmp = malloc(size);
-    
+
     memcpy(tmp, a, size);
     memcpy(a, b, size);
     memcpy(b, tmp, size);
-    
+
     free(tmp);
 }
+
 //endregion UTILITY
 
 //region MEMORY MANAGEMENT
@@ -87,6 +114,7 @@ void free_instance(instance *inst) {
     // free(inst->demand);
     free(inst->xcoord);
     free(inst->ycoord);
+    free(inst->distances);
     // free(inst->load_min);
     // free(inst->load_max);
 }
@@ -124,15 +152,14 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     //@COMPLEX@: Command line parser uses a simple loop to match flags and store values in the instance structure.
     for (int i = 1; i < argc; i++) {
         //region INPUT FILE
-        if(
-            (strcmp(argv[i], "-file") == 0) || 
+        if (
+            (strcmp(argv[i], "-file") == 0) ||
             (strcmp(argv[i], "-input") == 0) ||
             (strcmp(argv[i], "-f") == 0)
-        )
-        {
+        ) {
             strcpy(inst->input_file, argv[++i]);
             continue;
-        } 
+        }
         //endregion INPUT FILE
 
         //region RANDOM INSTANCE
@@ -140,8 +167,8 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->randomseed = abs(atoi(argv[++i]));
             continue;
         } // random seed
-        
-        if(strcmp(argv[i], "-nodes_count") == 0){
+
+        if (strcmp(argv[i], "-nodes_count") == 0) {
             inst->nnodes = abs(atoi(argv[++i]));
             continue;
         }
@@ -151,7 +178,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->timelimit = atof(argv[++i]);
             continue;
         } // total time limit
-        if ((strcmp(argv[i], "-model_type") == 0) || 
+        if ((strcmp(argv[i], "-model_type") == 0) ||
             (strcmp(argv[i], "-model") == 0)
         ) {
             inst->model_type = atoi(argv[++i]);
@@ -185,8 +212,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->integer_costs = 1;
             continue;
         } // inteher costs
-        if ((strcmp(argv[i], "-help") == 0) || strcmp(argv[i], "--help") == 0)
-        {
+        if ((strcmp(argv[i], "-help") == 0) || strcmp(argv[i], "--help") == 0) {
             help = 1;
             continue;
         } // help
@@ -213,8 +239,42 @@ void parse_command_line(int argc, char **argv, instance *inst) {
 
     if (help) exit(1);
 }
+
 //endregion PARSER
 
+//region DISTANCE CALCULATION
+/**
+ * @brief Calculates the distance between two nodes based on the instance's edge weight type.
+ *
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @param inst Pointer to the instance structure.
+ * @return double The calculated distance between node i and node j.
+ */
+double dist(unsigned int i, unsigned int j, const instance *inst) {
+    double dx = inst->xcoord[i] - inst->xcoord[j];
+    double dy = inst->ycoord[i] - inst->ycoord[j];
+    if (!inst->integer_costs) return sqrt(dx * dx + dy * dy);
+    int dis = sqrt(dx * dx + dy * dy) + 0.499999999; // nearest integer
+    return dis + 0.0;
+}
+
+/**
+ * @brief Calculates the squared distance between two nodes.
+ * 
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @param inst Pointer to the instance structure.
+ * @return double The calculated squared distance between node i and node j.
+ */
+double distSquared(unsigned int i, unsigned int j, const instance *inst) {
+    double dx = inst->xcoord[i] - inst->xcoord[j];
+    double dy = inst->ycoord[i] - inst->ycoord[j];
+    if (!inst->integer_costs) return (dx * dx + dy * dy);
+    int dis = (dx * dx + dy * dy) + 0.499999999; // nearest integer
+    return dis + 0.0;
+}
+//endregion DISTANCE CALCULATION
 
 //region INPUT READER
 /**
@@ -225,11 +285,9 @@ void parse_command_line(int argc, char **argv, instance *inst) {
 
 //WARNING: Does it makes sense to print_error and exit program ?
 void read_input(instance *inst) {
-    
     //TODO: Implement here the possibility of generating the random instance
     FILE *fin = fopen(inst->input_file, "r");
-    if (fin == NULL) 
-    {
+    if (fin == NULL) {
         print_error(" input file not found!");
     }
 
@@ -334,6 +392,7 @@ void read_input(instance *inst) {
         printf(" final active section %d\n", active_section);
         print_error(" ... wrong format for the current simplified parser!!!!!!!!!");
     }
+
 
     fclose(fin);
 }

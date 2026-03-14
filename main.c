@@ -12,7 +12,6 @@
  * @return int Returns 0 on success, 1 on error.
  */
 int main(int argc, char **argv) {
-
     //NOTE: No parameteres included
     if (argc < 2) {
         printf("Usage: %s -help for help\n", argv[0]);
@@ -29,6 +28,7 @@ int main(int argc, char **argv) {
     //NOTE: Managing input
     parse_command_line(argc, argv, &inst);
     read_input(&inst);
+    init_distances(&inst);
 
     //NOTE: Init Computation
     unsigned int *solution = initialize_solution(inst.nnodes);
@@ -60,9 +60,11 @@ int main(int argc, char **argv) {
     plot_tour(&inst, solution, 0);
 
     //TODO: Gestire con enumeratore da riga di comando
-    
+
     //TSPopt(&inst, solution);
-    tspNN(&inst, solution);
+    // tspNN(&inst, solution);
+
+    tspNNBatch(&inst, solution);
 
     plot_tour(&inst, solution, 0);
 

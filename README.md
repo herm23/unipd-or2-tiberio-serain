@@ -77,13 +77,16 @@ The executable accepts several command-line arguments to control the optimizatio
 
 - `main.c`: Entry point, handles command-line parsing and high-level execution flow. Segmented into regions (MAIN, PARSER, etc.) with detailed verbosity level documentation.
 - `tsp.c` / `tsp.h`: Core TSP logic, data structures, and CPLEX model implementations.
+- `utils.c` / `utils.h`: Shared utility functions, distance calculations, and TSPLIB parsing logic.
 - `chrono.c` / `chrono.h`: Utility functions for precise timing and performance measurement.
+- `consts.h`: Global constants and verbosity level definitions.
 
 ### Code Style & Documentation
-The codebase adheres to the following standards:
-- **Javadoc-style comments**: Each function includes `@brief`, `@param`, and `@return` tags for clear interface documentation.
-- **Complex logic tagging**: Sections with non-trivial implementation details are marked with `//@COMPLEX@: <explanation>` to assist in code review and maintenance.
-- **Region segmentation**: Logical groups of functions and definitions are enclosed in `#region` and `#endregion` tags for improved IDE navigation.
+The codebase adheres to the following standards across all files:
+- **Javadoc-style comments**: Every function and significant data structure includes `@brief`, `@param`, and `@return` tags for clear interface documentation.
+- **Complex logic tagging**: Sections with non-trivial implementation details (e.g., Fisher-Yates shuffle, CPLEX variable mapping, Hamiltonian cycle validation) are marked with `//@COMPLEX@: <explanation>` to assist in code review and maintenance.
+- **Region segmentation**: Logical groups of functions, declarations, and data structures are enclosed in `#region` and `#endregion` tags for improved IDE navigation (compatible with CLion, VS Code, etc.).
+- **Verbosity levels**: Standardized logging throughout the program, controlled by the `VERBOSE` constant.
 
 - `att48.tsp`: Sample TSP instance (48 cities in the US).
 - `prompts/`: Contains documentation regarding prompt engineering used during development.

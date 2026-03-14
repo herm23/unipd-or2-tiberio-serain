@@ -29,6 +29,9 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
  */
 short check_tour(const instance *inst, const unsigned int *solution);
 
+short setDistance(unsigned int i, unsigned int j, const instance *inst, double dist);
+
+double getDistance(unsigned int i, unsigned int j, const instance *inst);
 
 //TODO: Remove method
 /**
@@ -39,8 +42,10 @@ short check_tour(const instance *inst, const unsigned int *solution);
  */
 void TSPopt(instance *inst, unsigned int *sol);
 
+short tspNNBatch(instance *inst, unsigned int *sol);
+
 //TODO: Manage errors
-double tspNN(instance *inst, unsigned int *sol);
+double tspNN(instance *inst, unsigned int startingNode, unsigned int *sol);
 
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H

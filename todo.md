@@ -18,4 +18,5 @@ List of planned features, bug fixes, and improvements for the TSP solver.
 - [x] Standardize function documentation (Javadoc-style).
 - [x] Tag complex code sections for better readability (`//@COMPLEX@`).
 - [x] Document verbosity levels for easier debugging.
-- [x] Segment `main.c` into logical regions for better maintainability.
+- [x] Segment `main.c` and `utils.c` into logical regions for better maintainability.
+- [x] Complete Javadoc-style documentation and @COMPLEX@ tagging for all files.

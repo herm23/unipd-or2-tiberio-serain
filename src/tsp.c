@@ -1,5 +1,7 @@
 #include "./../headers/tsp.h"
 
+#include "../headers/chrono.h"
+
 #ifdef _WIN32
 #define popen _popen
 #define pclose _pclose
@@ -138,29 +140,39 @@ short check_tour(const instance *inst, const unsigned int *solution) {
     return 0;
 }
 
-
-/**
- * @brief Calculates the distance between two nodes based on the instance's edge weight type.
- * 
- * @param i Index of the first node.
- * @param j Index of the second node.
- * @param inst Pointer to the instance structure.
- * @return double The calculated distance between node i and node j.
- */
-double dist(unsigned int i, unsigned int j, instance *inst) {
-    double dx = inst->xcoord[i] - inst->xcoord[j];
-    double dy = inst->ycoord[i] - inst->ycoord[j];
-    if (!inst->integer_costs) return sqrt(dx * dx + dy * dy);
-    int dis = sqrt(dx * dx + dy * dy) + 0.499999999; // nearest integer
-    return dis + 0.0;
+unsigned int index_upper(unsigned int i, unsigned int j, unsigned int N) {
+    return i * N - i * (i + 1) / 2 + (j - i - 1);
 }
 
-double distSquared(unsigned int i, unsigned int j, instance *inst) {
-    double dx = inst->xcoord[i] - inst->xcoord[j];
-    double dy = inst->ycoord[i] - inst->ycoord[j]; 
-    if (!inst->integer_costs) return (dx * dx + dy * dy);
-    int dis = (dx * dx + dy * dy) + 0.499999999; // nearest integer
-    return dis + 0.0;
+short setDistance(unsigned int i, unsigned int j, const instance *inst, const double dist) {
+    if (inst == NULL) return 1;
+
+    if (i == j)
+        return 2;
+
+    if (i > j) {
+        const unsigned int tmp = i;
+        i = j;
+        j = tmp;
+    }
+
+    inst->distances[index_upper(i, j, inst->nnodes)] = dist;
+    return 0;
+}
+
+double getDistance(unsigned int i, unsigned int j, const instance *inst) {
+    if (inst == NULL) return -1;
+
+    if (i == j)
+        return 2;
+
+    if (i > j) {
+        const unsigned int tmp = i;
+        i = j;
+        j = tmp;
+    }
+
+    return inst->distances[index_upper(i, j, inst->nnodes)];
 }
 
 //TODO: Pre-fetched distances method
@@ -182,7 +194,6 @@ static double tour_cost(instance *inst, unsigned int *sol) {
     cost += dist(sol[N - 1], sol[0], inst);
     return cost;
 }
-
 
 
 // Helper per controllo errori CPLEX
@@ -512,16 +523,39 @@ void TSPopt(instance *inst, unsigned int *sol) {
 }
 
 
-void tspNNBatch(){
+short tspNNBatch(instance *inst, unsigned int *sol) {
     //TODO: random_shuffle solution or array of nodes
-    //for {
-    // double tmpSol = tspNN(...)
-    // if(tmpSol < inst->zbest)
-    // {
-    //     inst->zbest = tmpSol;
-    // }
-    // evaluate time
-    // }
+
+    short exitStatus = 0;
+
+    unsigned int *nodes_order = initialize_solution(inst->nnodes);
+    random_shuffle(nodes_order, inst->nnodes);
+
+    double starTime = second();
+
+    for (int i = 0; i < inst->nnodes; i++) {
+        unsigned int *temp_solution = initialize_solution(inst->nnodes);
+        double curr_sol = tspNN(inst, nodes_order[i], temp_solution);
+
+        //TODO print debug
+        // printf("Solution %d [starting with node %d]: %lf, Current best solution is %lf\n", i, nodes_order[i], curr_sol, inst->zbest);
+
+        double curr_time = second() - starTime;
+        if (inst->zbest < 0 || curr_sol < inst->zbest) {
+            inst->zbest = curr_sol;
+            inst->tbest = curr_time;
+            memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
+        }
+        free(temp_solution);
+
+        if (curr_time > inst->timelimit) {
+            exitStatus = 1;
+            break;
+        }
+    }
+
+    free(nodes_order);
+    return exitStatus;
 }
 
 //(On input you must provide the starting nodes sequence.)
@@ -532,42 +566,38 @@ void tspNNBatch(){
 //Iterate this procedure until you have visited the all nodes
 
 //TODO: Add third param for rand or passed node
-double tspNN(instance *inst, unsigned int *sol){
+double tspNN(instance *inst, const unsigned int startingNode, unsigned int *sol) {
     const int nodes = inst->nnodes;
 
     //NOTE: Init starting random node
-    int node_index = rand() % nodes;
+    unsigned int node_index = startingNode;
+    if (startingNode == -1)
+        node_index = rand() % nodes;
 
     swap(&sol[0], &sol[node_index], sizeof(int));
 
     double minDist = -1.0;
-    double tmpDist = -1;
-    int pointIndex = -1;
+    unsigned int pointIndex = -1;
+
     double currSol = 0;
-    
 
     //NOTE: The last 2 are already positioned
-    for(unsigned int i = 0; i < nodes - 2; i++)
-    {
-        for(unsigned int j = i+1; j < nodes; j++)
-        {
-            tmpDist = distSquared(sol[i], sol[j], inst);
-            if(minDist == -1 || tmpDist < minDist)
-            {
+    for (unsigned int i = 0; i < nodes - 2; i++) {
+        for (unsigned int j = i + 1; j < nodes; j++) {
+            // double tmpDist = distSquared(sol[i], sol[j], inst); //TODO: why squared??
+            double tmpDist = getDistance(sol[i], sol[j], inst); // memoized
+            if (minDist == -1 || tmpDist < minDist) {
                 minDist = tmpDist;
                 pointIndex = j;
             }
         }
         currSol += minDist;
-        swap(&sol[i+1], &sol[pointIndex], sizeof(int));
+        swap(&sol[i + 1], &sol[pointIndex], sizeof(int));
         minDist = -1.0;
         pointIndex = -1;
-
-        //TODO: Add time check
+        //TODO: Add optional time check
     }
 
-    //TODO: Add last distance (last array elem to first elem)
-
+    currSol += distSquared(sol[nodes - 1], sol[0], inst);
     return currSol;
 }
-
