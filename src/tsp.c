@@ -163,6 +163,8 @@ double distSquared(unsigned int i, unsigned int j, instance *inst) {
     return dis + 0.0;
 }
 
+//TODO: Pre-fetched distances method
+
 /**
  * @brief Calculates the total cost of a given tour.
  * 
@@ -509,7 +511,19 @@ void TSPopt(instance *inst, unsigned int *sol) {
     CPXcloseCPLEX(&env);
 }
 
-//TODO: We have to implement the TSP solution with the NN heuristics approach. 
+
+void tspNNBatch(){
+    //TODO: random_shuffle solution or array of nodes
+    //for {
+    // double tmpSol = tspNN(...)
+    // if(tmpSol < inst->zbest)
+    // {
+    //     inst->zbest = tmpSol;
+    // }
+    // evaluate time
+    // }
+}
+
 //(On input you must provide the starting nodes sequence.)
 //Steps:
 //Init a vector with the all nodes
@@ -517,7 +531,8 @@ void TSPopt(instance *inst, unsigned int *sol) {
 //Chose the next node based on the lowest cost from the first visited node and all the other nodes
 //Iterate this procedure until you have visited the all nodes
 
-void tspNN(instance *inst, unsigned int *sol){
+//TODO: Add third param for rand or passed node
+double tspNN(instance *inst, unsigned int *sol){
     const int nodes = inst->nnodes;
 
     //NOTE: Init starting random node
@@ -528,6 +543,8 @@ void tspNN(instance *inst, unsigned int *sol){
     double minDist = -1.0;
     double tmpDist = -1;
     int pointIndex = -1;
+    double currSol = 0;
+    
 
     //NOTE: The last 2 are already positioned
     for(unsigned int i = 0; i < nodes - 2; i++)
@@ -541,10 +558,16 @@ void tspNN(instance *inst, unsigned int *sol){
                 pointIndex = j;
             }
         }
-
+        currSol += minDist;
         swap(&sol[i+1], &sol[pointIndex], sizeof(int));
         minDist = -1.0;
         pointIndex = -1;
+
+        //TODO: Add time check
     }
+
+    //TODO: Add last distance (last array elem to first elem)
+
+    return currSol;
 }
 

@@ -7,12 +7,15 @@
  * 
  * @param err The error message to be printed.
  */
+
+ //TODO: Refactor
 void print_error(const char *err) {
     printf("\n\n ERROR: %s \n\n", err);
     fflush(NULL);
     exit(1);
 }
 
+//NOTE: Debug
 void print_array(int *array, int size) {
     printf("[");
     for (int i = 0; i < size; i++) {
@@ -56,7 +59,6 @@ unsigned int *initialize_solution(const unsigned int N) {
     //Keeping all unsigned (all indexes are positive)
     unsigned int *solution = malloc(N * sizeof(unsigned int));
     if (!solution) return NULL;
-
     for (unsigned int i = 0; i < N; ++i) {
         solution[i] = i;
     }
@@ -149,8 +151,9 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->timelimit = atof(argv[++i]);
             continue;
         } // total time limit
-
-        if (strcmp(argv[i], "-model_type") == 0) {
+        if ((strcmp(argv[i], "-model_type") == 0) || 
+            (strcmp(argv[i], "-model") == 0)
+        ) {
             inst->model_type = atoi(argv[++i]);
             continue;
         } // model type
@@ -158,11 +161,6 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->old_benders = atoi(argv[++i]);
             continue;
         } // old benders
-        if (strcmp(argv[i], "-model") == 0) {
-            inst->model_type = atoi(argv[++i]);
-            continue;
-        } // model type
-        
         if (strcmp(argv[i], "-threads") == 0) {
             inst->num_threads = atoi(argv[++i]);
             continue;

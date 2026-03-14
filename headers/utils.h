@@ -36,8 +36,6 @@ typedef struct {
     double tbest; // time for the best sol. available
     double *best_sol; // best sol. available
     double best_lb; // best lower bound available
-    double *load_min; // minimum load when leaving a node
-    double *load_max; // maximum load when leaving a node
 
     // model;
     //@COMPLEX@: Offsets for different sets of variables (x, u, etc.) in the CPLEX model's flattened variable array.

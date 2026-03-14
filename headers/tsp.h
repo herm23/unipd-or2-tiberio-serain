@@ -29,6 +29,8 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
  */
 short check_tour(const instance *inst, const unsigned int *solution);
 
+
+//TODO: Remove method
 /**
  * @brief Optimizes the TSP using CPLEX.
  * 
@@ -37,7 +39,8 @@ short check_tour(const instance *inst, const unsigned int *solution);
  */
 void TSPopt(instance *inst, unsigned int *sol);
 
-void tspNN(instance *inst, unsigned int *sol);
+//TODO: Manage errors
+double tspNN(instance *inst, unsigned int *sol);
 
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H
