@@ -19,4 +19,4 @@
 #define EPSILON               1e-9      
 #define TICKS_PER_SECOND      1000.0    
 
-#endif // CONSTANTS_H
+#endif // CONSTS_H
