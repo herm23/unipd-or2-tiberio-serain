@@ -83,6 +83,8 @@ inline double dmax(double d1, double d2) { return (d1 > d2) ? d1 : d2; }
 //endregion MATH UTILITIES
 
 //region UTILITY
+void reverse_subcircular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r);
+
 /**
  * @brief Shuffles an array of unsigned integers randomly.
  * 

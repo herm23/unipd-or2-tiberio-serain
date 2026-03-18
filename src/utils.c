@@ -4,6 +4,21 @@
 #include "./../headers/consts.h"
 
 //region UTILITY
+void reverse_subcircular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r) {
+    //r escluso
+    int len = (N - l) + r;
+    if (l <= r) len = r - l;
+
+    for (int i = 0; i < len / 2; i++) {
+        int left = (l + i) % N;
+        int right = (l + len - 1 - i) % N;
+
+        int temp = C[left];
+        C[left] = C[right];
+        C[right] = temp;
+    }
+}
+
 /**
  * @brief Prints an error message and terminates the program.
  * 
@@ -274,6 +289,7 @@ double distSquared(unsigned int i, unsigned int j, const instance *inst) {
     int dis = (dx * dx + dy * dy) + 0.499999999; // nearest integer
     return dis + 0.0;
 }
+
 //endregion DISTANCE CALCULATION
 
 //region INPUT READER

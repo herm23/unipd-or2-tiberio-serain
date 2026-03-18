@@ -47,5 +47,9 @@ short tspNNBatch(instance *inst, unsigned int *sol);
 //TODO: Manage errors
 double tspNN(instance *inst, unsigned int startingNode, unsigned int *sol);
 
+short TwoOpt_refinement(instance *inst, unsigned int *sol);
+
+double TwoOpt_refinement_iteration(instance *inst, unsigned int *sol);
+
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H

@@ -68,6 +68,10 @@ int main(int argc, char **argv) {
 
     plot_tour(&inst, solution, 0);
 
+    TwoOpt_refinement(&inst, solution);
+    plot_tour(&inst, solution, 0);
+
+
     check_solution = check_tour(&inst, solution);
     if (check_solution != 0) {
         free(solution);

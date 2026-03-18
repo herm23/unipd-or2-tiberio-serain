@@ -1,4 +1,5 @@
 #include "./../headers/tsp.h"
+#include "./../headers/utils.h"
 
 #include "../headers/chrono.h"
 
@@ -564,8 +565,6 @@ short tspNNBatch(instance *inst, unsigned int *sol) {
 //Chose the starting node at random by performing the swap with (first node in the vector and actual chosen first node)
 //Chose the next node based on the lowest cost from the first visited node and all the other nodes
 //Iterate this procedure until you have visited the all nodes
-
-//TODO: Add third param for rand or passed node
 double tspNN(instance *inst, const unsigned int startingNode, unsigned int *sol) {
     const int nodes = inst->nnodes;
 
@@ -600,4 +599,74 @@ double tspNN(instance *inst, const unsigned int startingNode, unsigned int *sol)
 
     currSol += distSquared(sol[nodes - 1], sol[0], inst);
     return currSol;
+}
+
+
+short TwoOpt_refinement(instance *inst, unsigned int *sol) {
+    short exitStatus = 0;
+
+    double starTime = second();
+    // for (int i = 0; i < inst->nnodes; i++) {
+    while (1) {
+        unsigned int *temp_solution = initialize_solution(inst->nnodes);
+        memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+        double curr_delta = TwoOpt_refinement_iteration(inst, temp_solution);
+        printf("Current best delta is %lf\n", curr_delta);
+
+        double curr_time = second() - starTime;
+        if (curr_delta == 0)
+            return 0;
+
+        inst->zbest -= curr_delta;
+        inst->tbest = curr_time;
+        memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
+        free(temp_solution);
+
+        if (curr_time > inst->timelimit) {
+            exitStatus = 1;
+            break;
+        }
+    }
+    // }
+    return exitStatus;
+}
+
+double TwoOpt_refinement_iteration(instance *inst, unsigned int *sol) {
+    const int nodes = inst->nnodes;
+
+    double maxDeltaCost = 0;
+    unsigned int a = -1, b = -1;
+
+    for (unsigned int i = 0; i < nodes; i++) {
+        for (unsigned int j = i + 1; j < nodes; j++) {
+            unsigned int ip1 = (i + 1) % nodes;
+            unsigned int jp1 = (j + 1) % nodes;
+
+            // evita di spezzare archi adiacenti
+            if (i == j) continue;
+            if (ip1 == j) continue; // archi consecutivi
+            if (jp1 == i) continue; // caso circolare
+
+            double aaprime = getDistance(sol[i], sol[ip1], inst);
+            double bbprime = getDistance(sol[j], sol[jp1], inst);
+            double ab = getDistance(sol[i], sol[j], inst);
+            double aprimebprime = getDistance(sol[ip1], sol[jp1], inst);
+
+            double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
+
+            if (deltaCost < maxDeltaCost) {
+                maxDeltaCost = deltaCost;
+                a = i;
+                b = j;
+            }
+        }
+    }
+
+    if (maxDeltaCost != 0) {
+        //MOVE
+        swap(&sol[a + 1], &sol[b], sizeof(int));
+        reverse_subcircular(sol, nodes, a + 2, b);
+    }
+
+    return maxDeltaCost;
 }
