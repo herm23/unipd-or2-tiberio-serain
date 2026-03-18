@@ -583,7 +583,6 @@ double tspNN(instance *inst, const unsigned int startingNode, unsigned int *sol)
     //NOTE: The last 2 are already positioned
     for (unsigned int i = 0; i < nodes - 2; i++) {
         for (unsigned int j = i + 1; j < nodes; j++) {
-            // double tmpDist = distSquared(sol[i], sol[j], inst); //TODO: why squared??
             double tmpDist = getDistance(sol[i], sol[j], inst); // memoized
             if (minDist == -1 || tmpDist < minDist) {
                 minDist = tmpDist;
@@ -634,7 +633,7 @@ short TwoOpt_refinement(instance *inst, unsigned int *sol) {
 double TwoOpt_refinement_iteration(instance *inst, unsigned int *sol) {
     const int nodes = inst->nnodes;
 
-    double maxDeltaCost = 0;
+    double minDeltaCost = 0;
     unsigned int a = -1, b = -1;
 
     for (unsigned int i = 0; i < nodes; i++) {
@@ -654,19 +653,19 @@ double TwoOpt_refinement_iteration(instance *inst, unsigned int *sol) {
 
             double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
 
-            if (deltaCost < maxDeltaCost) {
-                maxDeltaCost = deltaCost;
+            if (deltaCost < minDeltaCost) {
+                minDeltaCost = deltaCost;
                 a = i;
                 b = j;
             }
         }
     }
 
-    if (maxDeltaCost != 0) {
+    if (minDeltaCost != 0) {
         //MOVE
         swap(&sol[a + 1], &sol[b], sizeof(int));
         reverse_subcircular(sol, nodes, a + 2, b);
     }
 
-    return maxDeltaCost;
+    return minDeltaCost;
 }

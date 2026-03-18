@@ -6,14 +6,14 @@
 //region UTILITY
 void reverse_subcircular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r) {
     //r escluso
-    int len = (N - l) + r;
+    unsigned int len = (N - l) + r;
     if (l <= r) len = r - l;
 
     for (int i = 0; i < len / 2; i++) {
-        int left = (l + i) % N;
-        int right = (l + len - 1 - i) % N;
+        unsigned int left = (l + i) % N;
+        unsigned int right = (l + len - 1 - i) % N;
 
-        int temp = C[left];
+        unsigned int temp = C[left];
         C[left] = C[right];
         C[right] = temp;
     }
@@ -55,7 +55,7 @@ void print_array(int *array, int size) {
  * @param inst Pointer to the instance structure.
  */
 void init_distances(instance *inst) {
-    inst->distances = malloc(inst->nnodes * inst->nnodes * sizeof(double));
+    inst->distances = malloc(inst->nnodes * inst->nnodes * sizeof(double)); //TODO fix this
     for (int i = 0; i < inst->nnodes; i++) {
         for (int j = i + 1; j < inst->nnodes; j++) {
             setDistance(i, j, inst, dist(i, j, inst));
