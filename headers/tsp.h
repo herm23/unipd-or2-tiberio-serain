@@ -18,7 +18,8 @@
  * @param solution The solution array representing the tour.
  * @param only_instance Flag to plot only the instance nodes without the tour.
  */
-void plot_tour(const instance *inst, const unsigned int *solution, int only_instance);
+void plot_tour(const instance *inst, const unsigned int *solution, int only_instance, FILE **windows, int *count);
+void close_all_plots(FILE **windows, int count);
 
 /**
  * @brief Checks if a solution represents a valid tour (Hamiltonian cycle).

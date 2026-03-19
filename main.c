@@ -22,6 +22,9 @@ int main(int argc, char **argv) {
         printf("\n");
     }
 
+    FILE *plots[20] = {NULL};
+    int plot_count = 0;
+
     double t1 = second();
     instance inst;
 
@@ -56,21 +59,16 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    plot_tour(&inst, solution, 1);
-    plot_tour(&inst, solution, 0);
+    plot_tour(&inst, solution, 1, plots, &plot_count);
+    plot_tour(&inst, solution, 0, plots, &plot_count);
 
     //TODO: Gestire con enumeratore da riga di comando
 
-    //TSPopt(&inst, solution);
-    // tspNN(&inst, solution);
-
     tspNNBatch(&inst, solution);
-
-    plot_tour(&inst, solution, 0);
+    plot_tour(&inst, solution, 0, plots, &plot_count);
 
     TwoOpt_refinement(&inst, solution);
-    plot_tour(&inst, solution, 0);
-
+    plot_tour(&inst, solution, 0, plots, &plot_count);
 
     check_solution = check_tour(&inst, solution);
     if (check_solution != 0) {
@@ -80,13 +78,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-
     if (VERBOSE >= 1000) {
         for (unsigned int i = 0; i < inst.nnodes; ++i) {
             printf("%d --> %d\n", i, solution[i]);
         }
     }
-
 
     double t2 = second();
 
@@ -96,6 +92,8 @@ int main(int argc, char **argv) {
 
     printf("\nPress ENTER to close the graph and exit the program...");
     getchar();
+
+    close_all_plots(plots, plot_count);
 
     free(solution);
     free_instance(&inst);

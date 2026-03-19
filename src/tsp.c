@@ -15,7 +15,7 @@
  * @param solution The solution array representing the tour.
  * @param only_instance Flag to plot only the instance nodes without the tour edges.
  */
-void plot_tour(const instance *inst, const unsigned int *solution, int only_instance) {
+void plot_tour(const instance *inst, const unsigned int *solution, int only_instance, FILE **windows, int *count) {
     /* ----------- Basic error checking ----------- */
     if (inst == NULL) {
         fprintf(stderr, "plot_tour error: inst is NULL\n");
@@ -37,14 +37,21 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
         return;
     }
 
+    if (*count >= 20) {
+        fprintf(stderr, "plot_tour error: maximum number of plot windows reached\n");
+        return;
+    }
+
     /* ----------- Open gnuplot pipe ----------- */
-    //@COMPLEX@: Opens a persistent pipe to gnuplot for visualization. This requires gnuplot to be installed and in the system PATH.
-    FILE *gp = popen("gnuplot -persistent", "w");
-    // FILE *gp = popen("gnuplot", "w");
+    //@COMPLEX@: Opens a pipe to gnuplot for visualization. Removed -persistent to allow automatic closing.
+    FILE *gp = popen("gnuplot", "w");
     if (gp == NULL) {
         perror("plot_tour error: popen failed");
         return;
     }
+
+    windows[*count] = gp;
+    (*count)++;
 
     /* ----------- Gnuplot configuration ----------- */
     fprintf(gp, "set title 'TSP Visualization'\n");
@@ -75,7 +82,6 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
 
             if (idx < 0 || idx >= inst->nnodes) {
                 fprintf(stderr, "plot_tour error: invalid index in solution\n");
-                pclose(gp);
                 return;
             }
 
@@ -103,9 +109,13 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
     }
 
     fflush(gp);
-    pclose(gp);
 }
 
+void close_all_plots(FILE **windows, int count) {
+    for (int i = 0; i < count; i++) {
+        if (windows[i] != NULL) pclose(windows[i]);
+    }
+}
 
 /**
  * @brief Checks if a solution represents a valid Hamiltonian tour (cycle).

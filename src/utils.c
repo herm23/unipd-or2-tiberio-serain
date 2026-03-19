@@ -148,6 +148,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     if (VERBOSE >= 100) printf(" running %s with %d parameters \n", argv[0], argc - 1);
 
     // default
+    inst->zbest = -1;
     inst->model_type = 0;
     inst->old_benders = 0;
     strcpy(inst->input_file, DEFAULT_INPUT);
