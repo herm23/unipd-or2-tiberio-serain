@@ -40,6 +40,7 @@ void plot_tour(const instance *inst, const unsigned int *solution, int only_inst
     /* ----------- Open gnuplot pipe ----------- */
     //@COMPLEX@: Opens a persistent pipe to gnuplot for visualization. This requires gnuplot to be installed and in the system PATH.
     FILE *gp = popen("gnuplot -persistent", "w");
+    // FILE *gp = popen("gnuplot", "w");
     if (gp == NULL) {
         perror("plot_tour error: popen failed");
         return;

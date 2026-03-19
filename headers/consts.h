@@ -17,6 +17,12 @@
 // hard-wired parameters
 #define XSMALL                1e-5      
 #define EPSILON               1e-9      
-#define TICKS_PER_SECOND      1000.0    
+#define TICKS_PER_SECOND      1000.0
+
+#define DEFAULT_INPUT "NULL"
+//random ranges constants
+#define DEFAULTSEEDVAL        -1
+#define XMAX                  10000.0
+#define YMAX                  10000.0
 
 #endif // CONSTS_H

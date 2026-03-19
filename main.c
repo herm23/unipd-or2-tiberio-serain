@@ -94,6 +94,9 @@ int main(int argc, char **argv) {
         printf("... TSP problem solved in %lf sec.s\n", t2 - t1);
     }
 
+    printf("\nPress ENTER to close the graph and exit the program...");
+    getchar();
+
     free(solution);
     free_instance(&inst);
     return 0;

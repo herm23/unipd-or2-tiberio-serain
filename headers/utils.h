@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cplex.h>
+#include <stdbool.h>
 
 //region STRUCTURES
 //TODO: Check used variables

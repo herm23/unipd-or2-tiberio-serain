@@ -150,8 +150,8 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     // default
     inst->model_type = 0;
     inst->old_benders = 0;
-    strcpy(inst->input_file, "NULL");
-    inst->randomseed = 0;
+    strcpy(inst->input_file, DEFAULT_INPUT);
+    inst->randomseed = DEFAULTSEEDVAL;
     inst->num_threads = 0;
     inst->timelimit = CPX_INFBOUND; //USARE QUESTI
     inst->cutoff = CPX_INFBOUND;
@@ -300,8 +300,7 @@ double distSquared(unsigned int i, unsigned int j, const instance *inst) {
  */
 
 //WARNING: Does it makes sense to print_error and exit program ?
-void read_input(instance *inst) {
-    //TODO: Implement here the possibility of generating the random instance
+void parse_tsp_file(instance *inst){
     FILE *fin = fopen(inst->input_file, "r");
     if (fin == NULL) {
         print_error(" input file not found!");
@@ -411,6 +410,57 @@ void read_input(instance *inst) {
 
 
     fclose(fin);
+}
+
+void generate_random_instance(instance *inst) {
+    if (inst->nnodes <= 0) {
+        print_error("Invalid number of nodes for random generation");
+    }
+    if (inst->randomseed == DEFAULTSEEDVAL) {
+        print_error("Invalid random seed passed");
+    }
+
+    //NOTE: Same as in the tsp parser, must be removed ?
+    inst->depot = -1;
+    inst->nveh = -1;   
+
+    inst->xcoord = (double *) calloc(inst->nnodes, sizeof(double));
+    inst->ycoord = (double *) calloc(inst->nnodes, sizeof(double));
+    
+    if (inst->xcoord == NULL || inst->ycoord == NULL) {
+        print_error("Memory allocation failed in generate_random_instance");
+    }
+
+    srand(inst->randomseed);
+    for(int i = 0; i < inst->nnodes; i++) {
+        inst->xcoord[i] = ((double)rand() / (double)RAND_MAX) * XMAX;
+        inst->ycoord[i] = ((double)rand() / (double)RAND_MAX) * YMAX;
+    }
+
+    if (VERBOSE >= 10) {
+        printf(" ... generated random instance with %d nodes and seed %u\n", inst->nnodes, inst->randomseed);
+    }
+}
+
+void read_input(instance *inst) {
+    bool has_input_file = (strcmp(inst->input_file, DEFAULT_INPUT) != 0);
+    bool has_random_params = (inst->randomseed != DEFAULTSEEDVAL && inst->nnodes > 0);
+
+    if (has_input_file && has_random_params) {
+        print_error("Invalid commands: please pass the input file OR the random instance");
+    }
+
+    if (has_input_file) {
+        parse_tsp_file(inst);
+        return;
+    }
+
+    if (has_random_params) {
+        generate_random_instance(inst);
+        return;
+    }
+
+    print_error("TSP instance not found");
 }
 
 //endregion INPUT READER
