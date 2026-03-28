@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+//region Plots
 /**
  * @brief Plots the tour using gnuplot by generating data and command files.
  * 
@@ -110,7 +111,6 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
     }
 
 
-
     fflush(inst->plot);
 
     if (pause && inst->plot != NULL) {
@@ -118,6 +118,8 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
         getchar();
     }
 }
+
+//endregion Plots
 
 /**
  * @brief Checks if a solution represents a valid Hamiltonian tour (cycle).
@@ -154,6 +156,20 @@ short is_solution_valid(const instance *inst, const unsigned int *solution) {
     return 0;
 }
 
+double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
+    double cost = 0.0;
+    int N = inst->nnodes;
+
+    for (int i = 0; i < N - 1; i++)
+        cost += calculate_distance(sol[i], sol[i + 1], inst);
+
+    cost += calculate_distance(sol[N - 1], sol[0], inst);
+    return cost;
+}
+
+
+//region Distances
+
 unsigned int index_upper(unsigned int i, unsigned int j, unsigned int N) {
     return i * N - i * (i + 1) / 2 + (j - i - 1);
 }
@@ -189,44 +205,43 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
     return inst->distances[index_upper(i, j, inst->nnodes)];
 }
 
-double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
-    double cost = 0.0;
-    int N = inst->nnodes;
-
-    for (int i = 0; i < N - 1; i++)
-        cost += calculate_distance(sol[i], sol[i + 1], inst);
-
-    cost += calculate_distance(sol[N - 1], sol[0], inst);
-    return cost;
-}
+//endregion Distances
 
 
-short greedy_nn_heuristic(instance *inst, unsigned int *sol) {
-    //TODO: random_shuffle solution or array of nodes
+short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFINEMENT_STRATEGY refinement) {
+    printf("\t## START greedy_nn_heuristic\n");
 
     short exitStatus = 0;
 
     unsigned int *nodes_order = initialize_identity_solution(inst->nnodes);
     random_array_shuffle(nodes_order, inst->nnodes);
 
-    double starTime = second();
-
     for (int i = 0; i < inst->nnodes; i++) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
-        double curr_sol = greedy_nn_heuristic_iteration(inst, nodes_order[i], temp_solution);
+        double temp_solution_cost = greedy_nn_heuristic_iteration(inst, nodes_order[i], temp_solution);
 
-        //TODO print debug
-        // printf("Solution %d [starting with node %d]: %lf, Current best solution is %lf\n", i, nodes_order[i], curr_sol, inst->zbest);
+        double curr_time = second() - inst->tstart;
+        printf("\t -> S-node %7d,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost,
+               curr_time);
 
-        double curr_time = second() - starTime;
-        if (inst->zbest < 0 || curr_sol < inst->zbest) {
-            inst->zbest = curr_sol;
-            inst->tbest = curr_time;
-            memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
+        if (refinement == TWO_OPT) {
+            printf("\n");
+            twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+            printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
+                   temp_solution_cost,
+                   curr_time);
         }
+
+        if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
+            inst->zbest = temp_solution_cost;
+            inst->tbest = curr_time;
+            memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
+            printf(" (INCUMBENT)");
+        }
+        printf("\n\n");
         free(temp_solution);
 
-        if (curr_time > inst->timelimit) {
+        if (curr_time > time_limit) {
             exitStatus = 1;
             break;
         }
@@ -236,12 +251,6 @@ short greedy_nn_heuristic(instance *inst, unsigned int *sol) {
     return exitStatus;
 }
 
-//(On input you must provide the starting nodes sequence.)
-//Steps:
-//Init a vector with the all nodes
-//Chose the starting node at random by performing the swap with (first node in the vector and actual chosen first node)
-//Chose the next node based on the lowest cost from the first visited node and all the other nodes
-//Iterate this procedure until you have visited the all nodes
 double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int startingNode, unsigned int *sol) {
     const int nodes = inst->nnodes;
 
@@ -270,40 +279,41 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
         swap(&sol[i + 1], &sol[pointIndex], sizeof(int));
         minDist = -1.0;
         pointIndex = -1;
-        //TODO: Add optional time check
     }
 
-    currSol += calculate_squared_distance(sol[nodes - 1], sol[0], inst);
+    currSol += get_precalculated_distance(inst, sol[nodes - 1], sol[0]);
     return currSol;
 }
 
 
-short twoOpt_refinement(instance *inst, unsigned int *sol) {
+short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
+    printf("\t\t## STARTING twoOpt_refinement\n");
+
     short exitStatus = 0;
 
-    double starTime = second();
-    // for (int i = 0; i < inst->nnodes; i++) {
+    double initial_cost = calculate_solution_cost(inst, sol);
+
     while (1) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
         memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
-        double curr_delta = twoOpt_refinement_iteration(inst, temp_solution);
-        printf("Current best delta is %lf\n", curr_delta);
+        double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
+        initial_cost += temp_solution_cost_delta;
 
-        double curr_time = second() - starTime;
-        if (curr_delta == 0)
+        double curr_time = second() - inst->tstart;
+        printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost, curr_time);
+        if (temp_solution_cost_delta == 0)
             return 0;
 
-        inst->zbest -= curr_delta;
-        inst->tbest = curr_time;
+        *zbest += temp_solution_cost_delta;
+        *tbest = curr_time;
         memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
         free(temp_solution);
 
-        if (curr_time > inst->timelimit) {
+        if (time_limit != 0 && curr_time > time_limit) {
             exitStatus = 1;
             break;
         }
     }
-    // }
     return exitStatus;
 }
 

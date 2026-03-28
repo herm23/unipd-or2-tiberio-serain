@@ -7,6 +7,16 @@
 
 #include "utils.h"
 
+enum TSP_SOLVING_STRATEGY {
+    LOW
+};
+
+enum TSP_REFINEMENT_STRATEGY {
+    NONE,
+    TWO_OPT
+};
+
+
 //region Plots
 /**
  * @brief Plots the solution using gnuplot
@@ -50,7 +60,7 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
 //region Heuristics
 
 //region NN
-short greedy_nn_heuristic(instance *inst, unsigned int *sol);
+short greedy_nn_heuristic(instance *inst, double time_limit, enum TSP_REFINEMENT_STRATEGY refinement);
 
 double greedy_nn_heuristic_iteration(const instance *inst, unsigned int startingNode, unsigned int *sol);
 
@@ -60,7 +70,7 @@ double greedy_nn_heuristic_iteration(const instance *inst, unsigned int starting
 
 
 //region Refinements
-short twoOpt_refinement(instance *inst, unsigned int *sol);
+short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
 
 double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol);
 

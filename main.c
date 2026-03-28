@@ -6,11 +6,6 @@
 #include <string.h>
 
 
-enum TSP_SOLVING_STRATEGY {
-    LOW
-};
-
-
 short TSP_OPT(instance *inst);
 
 /**
@@ -68,16 +63,16 @@ int main(int argc, char **argv) {
 
 
 short TSP_OPT(instance *inst) {
+    // INIT
+    inst->solution = initialize_identity_solution(inst->nnodes);
+
+    plot_solution(inst, inst->solution, 1, 1);
+    plot_solution(inst, inst->solution, 0, 1);
+
+
     const double starting_time = second();
 
-    // INIT
-    unsigned int *initial_solution = initialize_identity_solution(inst->nnodes);
-    plot_solution(inst, initial_solution, 1, 1);
-    plot_solution(inst, initial_solution, 0, 1);
-
-
-    inst->solution = initialize_identity_solution(inst->nnodes);
-    const double solution_cost = calculate_solution_cost(inst, initial_solution);
+    const double solution_cost = calculate_solution_cost(inst, inst->solution);
     inst->tbest = starting_time;
     inst->tstart = starting_time;
 
@@ -86,13 +81,13 @@ short TSP_OPT(instance *inst) {
 
     printf("## COST %15lf AT TIME 0\n", solution_cost);
 
-    plot_solution(inst, initial_solution, 0, 0);
+    plot_solution(inst, inst->solution, 0, 0);
 
-    greedy_nn_heuristic(inst, initial_solution);
-    plot_solution(inst, initial_solution, 0, 0);
+    greedy_nn_heuristic(inst, inst->timelimit, TWO_OPT);
+    plot_solution(inst, inst->solution, 0, 1);
 
-    twoOpt_refinement(inst, initial_solution);
-    plot_solution(inst, initial_solution, 0, 0);
+    // twoOpt_refinement(inst, inst->solution);
+    // plot_solution(inst, inst->solution, 0, 0);
 
     return 0;
 }
