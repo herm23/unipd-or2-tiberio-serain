@@ -8,7 +8,12 @@
 #include "utils.h"
 
 enum TSP_SOLVING_STRATEGY {
-    LOW
+    NN,
+    NN_TWO_OPT_MULTISTART,
+    NN_AND_TWO_OPT,
+    GRASP,
+    GRASP_TWO_OPT_MULTISTART,
+    GRASP_AND_TWO_OPT,
 };
 
 enum TSP_REFINEMENT_STRATEGY {
@@ -50,8 +55,25 @@ double calculate_solution_cost(const instance *inst, const unsigned int *sol);
 
 //region Distances
 
+/**
+ * @brief Sets the precalculated distance between two nodes in the distance matrix.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @param dist The distance to be set.
+ * @return short Returns 0 on success, non-zero otherwise.
+ */
 short set_precalculated_distance(const instance *inst, unsigned int i, unsigned int j, double dist);
 
+/**
+ * @brief Retrieves the precalculated distance between two nodes from the distance matrix.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @return double The precalculated distance between node i and node j.
+ */
 double get_precalculated_distance(const instance *inst, unsigned int i, unsigned int j);
 
 //endregion Distances
@@ -60,9 +82,29 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
 //region Heuristics
 
 //region NN
-short greedy_nn_heuristic(instance *inst, double time_limit, enum TSP_REFINEMENT_STRATEGY refinement);
+/**
+ * @brief Executes the Nearest Neighbor (NN) heuristic to solve the TSP.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param time_limit The maximum time allowed for the heuristic to run.
+ * @param GRASP_alpha ???
+ * @param refinement The refinement strategy to be applied after the heuristic.
+ * @return short Returns 0 on success, non-zero if the time limit was exceeded.
+ */
+short greedy_nn_heuristic(instance *inst, double time_limit, double GRASP_alpha,
+                          enum TSP_REFINEMENT_STRATEGY refinement);
 
-double greedy_nn_heuristic_iteration(const instance *inst, unsigned int startingNode, unsigned int *sol);
+/**
+ * @brief Performs a single iteration of the Nearest Neighbor heuristic starting from a specific node.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param startingNode The index of the node to start the tour from. If -1, a random node is chosen.
+ * @param GRASP_alpha ???
+ * @param sol Pointer to the array where the resulting tour will be stored.
+ * @return double The cost of the generated tour.
+ */
+double greedy_nn_heuristic_iteration(const instance *inst, unsigned int startingNode, double GRASP_alpha,
+                                     unsigned int *sol);
 
 //endregion NN
 
@@ -70,8 +112,25 @@ double greedy_nn_heuristic_iteration(const instance *inst, unsigned int starting
 
 
 //region Refinements
-short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
+/**
+ * @brief Applies the 2-opt refinement strategy to an existing TSP solution.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param time_limit The maximum time allowed for the refinement.
+ * @param sol Pointer to the solution array to be refined.
+ * @param zbest Pointer to the variable storing the cost of the best solution found.
+ * @param tbest Pointer to the variable storing the time when the best solution was found.
+ * @return short Returns 0 on success, non-zero if the time limit was exceeded.
+ */
+short twoOpt_refinement(const instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
 
+/**
+ * @brief Performs a single iteration of the 2-opt refinement.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param sol Pointer to the solution array to be refined.
+ * @return double The improvement (reduction in cost) achieved by the iteration.
+ */
 double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol);
 
 //endregion Refinements

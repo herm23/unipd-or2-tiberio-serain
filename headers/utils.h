@@ -5,6 +5,11 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#ifdef _WIN32
+#define popen _popen
+#define pclose _pclose
+#endif
+
 
 //region STRUCTURES
 typedef struct {
@@ -64,6 +69,14 @@ inline double dmax(double d1, double d2) { return (d1 > d2) ? d1 : d2; }
 //endregion MATH UTILITIES
 
 //region UTILITY
+/**
+ * @brief Reverses a subarray in a circular fashion within an array of unsigned integers.
+ * 
+ * @param C The array of unsigned integers.
+ * @param N The size of the array.
+ * @param l The starting index of the subarray to be reversed.
+ * @param r The ending index of the subarray to be reversed.
+ */
 void reverse_subarray_circular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r);
 
 /**
@@ -92,6 +105,8 @@ unsigned int *initialize_identity_solution(unsigned int N);
  */
 void swap(void *a, void *b, size_t size);
 
+double rand_0_1();
+
 /**
  * @brief Implementation of the command line parser.
  * 
@@ -113,7 +128,7 @@ void read_input(instance *inst);
  * 
  * @param err The error message to be printed.
  */
-void print_error(const char *err);
+void print_error_and_die(const char *err);
 
 /**
  * @brief Frees the memory allocated for the instance.

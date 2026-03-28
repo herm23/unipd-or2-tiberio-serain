@@ -30,7 +30,7 @@ void reverse_subarray_circular(unsigned int *C, unsigned int N, unsigned int l, 
  * 
  * @param err The error message to be printed.
  */
-void print_error(const char *err) {
+void print_error_and_die(const char *err) {
     printf("\n\n ERROR: %s \n\n", err);
     fflush(NULL);
     exit(1);
@@ -113,12 +113,17 @@ unsigned int *initialize_identity_solution(const unsigned int N) {
  * @param size Size of the elements to be swapped.
  */
 void swap(void *a, void *b, size_t size) {
-    // Alloca un buffer temporaneo della dimensione corretta
     void *tmp = malloc(size);
 
     memcpy(tmp, a, size);
     memcpy(a, b, size);
     memcpy(b, tmp, size);
+
+    free(tmp);
+}
+
+double rand_0_1() {
+    return (double) rand() / (double) RAND_MAX;
 }
 
 //endregion UTILITY
@@ -130,12 +135,12 @@ void swap(void *a, void *b, size_t size) {
  * @param inst Pointer to the instance structure to be freed.
  */
 void free_instance(instance *inst) {
-    // free(inst->demand);
     free(inst->xcoord);
     free(inst->ycoord);
     free(inst->distances);
-    // free(inst->load_min);
-    // free(inst->load_max);
+    free(inst->solution);
+    if (inst->plot)
+        pclose(inst->plot);
 }
 
 //endregion MEMORY MANAGEMENT
@@ -261,10 +266,15 @@ double calculate_squared_distance(unsigned int i, unsigned int j, const instance
  */
 
 //WARNING: Does it makes sense to print_error and exit program ?
+/**
+ * @brief Parses a TSP file in TSPLIB format and populates the instance structure.
+ * 
+ * @param inst Pointer to the instance structure.
+ */
 void parse_tsp_file(instance *inst) {
     FILE *fin = fopen(inst->input_file, "r");
     if (fin == NULL) {
-        print_error(" input file not found!");
+        print_error_and_die(" input file not found!");
     }
 
     inst->nnodes = -1;
@@ -307,7 +317,7 @@ void parse_tsp_file(instance *inst) {
         if (strncmp(par_name, "TYPE", 4) == 0) {
             token1 = strtok(NULL, " :");
             if (strncmp(token1, "TSP", 3) != 0)
-                print_error(
+                print_error_and_die(
                     " format error:  only TYPE == TSP implemented so far!");
             active_section = 0;
             continue;
@@ -315,7 +325,7 @@ void parse_tsp_file(instance *inst) {
 
 
         if (strncmp(par_name, "DIMENSION", 9) == 0) {
-            if (inst->nnodes >= 0) print_error(" repeated DIMENSION section in input file");
+            if (inst->nnodes >= 0) print_error_and_die(" repeated DIMENSION section in input file");
             token1 = strtok(NULL, " :");
             inst->nnodes = atoi(token1);
             if (do_print) printf(" ... nnodes %d\n", inst->nnodes);
@@ -329,7 +339,7 @@ void parse_tsp_file(instance *inst) {
         if (strncmp(par_name, "EDGE_WEIGHT_TYPE", 16) == 0) {
             token1 = strtok(NULL, " :");
             if (strncmp(token1, "ATT", 3) != 0)
-                print_error(
+                print_error_and_die(
                     " format error:  only EDGE_WEIGHT_TYPE == ATT implemented so far!");
             active_section = 0;
             continue;
@@ -337,7 +347,7 @@ void parse_tsp_file(instance *inst) {
 
         if (strncmp(par_name, "NODE_COORD_SECTION", 18) == 0) {
             if (inst->nnodes <= 0)
-                print_error(" ... DIMENSION section should appear before NODE_COORD_SECTION section");
+                print_error_and_die(" ... DIMENSION section should appear before NODE_COORD_SECTION section");
             active_section = 1;
             continue;
         }
@@ -353,7 +363,7 @@ void parse_tsp_file(instance *inst) {
         {
             int i = atoi(par_name) - 1;
             //@COMPLEX@: Converts 1-based node index from file to 0-based array index and parses coordinates.
-            if (i < 0 || i >= inst->nnodes) print_error(" ... unknown node in NODE_COORD_SECTION section");
+            if (i < 0 || i >= inst->nnodes) print_error_and_die(" ... unknown node in NODE_COORD_SECTION section");
             token1 = strtok(NULL, " :,");
             token2 = strtok(NULL, " :,");
             inst->xcoord[i] = atof(token1);
@@ -365,26 +375,31 @@ void parse_tsp_file(instance *inst) {
         }
 
         printf(" final active section %d\n", active_section);
-        print_error(" ... wrong format for the current simplified parser!!!!!!!!!");
+        print_error_and_die(" ... wrong format for the current simplified parser!!!!!!!!!");
     }
 
 
     fclose(fin);
 }
 
+/**
+ * @brief Generates a random TSP instance with a specified number of nodes.
+ * 
+ * @param inst Pointer to the instance structure.
+ */
 void generate_random_instance(instance *inst) {
     if (inst->nnodes <= 0) {
-        print_error("Invalid number of nodes for random generation");
+        print_error_and_die("Invalid number of nodes for random generation");
     }
     if (inst->randomseed == DEFAULTSEEDVAL) {
-        print_error("Invalid random seed passed");
+        print_error_and_die("Invalid random seed passed");
     }
 
     inst->xcoord = (double *) calloc(inst->nnodes, sizeof(double));
     inst->ycoord = (double *) calloc(inst->nnodes, sizeof(double));
 
     if (inst->xcoord == NULL || inst->ycoord == NULL) {
-        print_error("Memory allocation failed in generate_random_instance");
+        print_error_and_die("Memory allocation failed in generate_random_instance");
     }
 
     srand(inst->randomseed);
@@ -403,7 +418,7 @@ void read_input(instance *inst) {
     bool has_random_params = (inst->randomseed != DEFAULTSEEDVAL && inst->nnodes > 0);
 
     if (has_input_file && has_random_params) {
-        print_error("Invalid commands: please pass the input file OR the random instance");
+        print_error_and_die("Invalid commands: please pass the input file OR the random instance");
     }
 
     if (has_input_file) {
@@ -416,7 +431,7 @@ void read_input(instance *inst) {
         return;
     }
 
-    print_error("TSP instance not found");
+    print_error_and_die("TSP instance not found");
 }
 
 //endregion INPUT READER

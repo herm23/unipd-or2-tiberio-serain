@@ -8,6 +8,13 @@
 #define pclose _pclose
 #endif
 
+// #ifdef _WIN32
+// #include <windows.h>
+// #else
+// #include <unistd.h>
+// #endif
+
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,10 +58,11 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
             perror("plot_tour error: popen failed");
             return;
         }
+        // fprintf(inst->plot, "set term qt\n");
     }
 
     /* ----------- Gnuplot configuration ----------- */
-    fprintf(inst->plot, "clear\n");
+    // fprintf(inst->plot, "clear\n");
     fprintf(inst->plot, "set title 'TSP Visualization'\n");
     fprintf(inst->plot, "set xlabel 'X'\n");
     fprintf(inst->plot, "set ylabel 'Y'\n");
@@ -126,7 +134,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
  * 
  * @param inst Pointer to the instance structure.
  * @param solution The solution array to be checked.
- * @return short Returns 0 if valid, -1 if invalid or if memory allocation fails.
+ * @return short Returns 1 if valid, 0 if invalid or if memory allocation fails.
  */
 short is_solution_valid(const instance *inst, const unsigned int *solution) {
     //Return 0 if valid, -1 otherways
@@ -137,7 +145,7 @@ short is_solution_valid(const instance *inst, const unsigned int *solution) {
     const unsigned int N = inst->nnodes;
     unsigned char *visited = calloc(N, sizeof(unsigned char)); //with calloc we avoid the for loop for zero-init
 
-    if (!visited) return -1;
+    if (!visited) return 0;
 
     for (unsigned int i = 0; i < N; ++i) {
         unsigned int node = solution[i];
@@ -146,14 +154,14 @@ short is_solution_valid(const instance *inst, const unsigned int *solution) {
         if (node >= N || visited[node]) {
             //we can do only a single pass like this  if we know the range of elements
             free(visited);
-            return -1;
+            return 0;
         }
 
         visited[node] = 1;
     }
 
     free(visited);
-    return 0;
+    return 1;
 }
 
 double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
@@ -170,6 +178,14 @@ double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
 
 //region Distances
 
+/**
+ * @brief Calculates the index for an upper triangular distance matrix (without diagonal).
+ * 
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @param N Total number of nodes.
+ * @return unsigned int The index in the 1D distance array.
+ */
 unsigned int index_upper(unsigned int i, unsigned int j, unsigned int N) {
     return i * N - i * (i + 1) / 2 + (j - i - 1);
 }
@@ -208,7 +224,8 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
 //endregion Distances
 
 
-short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFINEMENT_STRATEGY refinement) {
+short greedy_nn_heuristic(instance *inst, double time_limit, double GRASP_alpha,
+                          const enum TSP_REFINEMENT_STRATEGY refinement) {
     printf("\t## START greedy_nn_heuristic\n");
 
     short exitStatus = 0;
@@ -218,7 +235,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
 
     for (int i = 0; i < inst->nnodes; i++) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
-        double temp_solution_cost = greedy_nn_heuristic_iteration(inst, nodes_order[i], temp_solution);
+        double temp_solution_cost = greedy_nn_heuristic_iteration(inst, nodes_order[i], GRASP_alpha, temp_solution);
 
         double curr_time = second() - inst->tstart;
         printf("\t -> S-node %7d,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost,
@@ -233,10 +250,14 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
         }
 
         if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
-            inst->zbest = temp_solution_cost;
-            inst->tbest = curr_time;
-            memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
-            printf(" (INCUMBENT)");
+            if (is_solution_valid(inst, temp_solution)) {
+                inst->zbest = temp_solution_cost;
+                inst->tbest = curr_time;
+                memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
+                printf(" (INCUMBENT)");
+            } else {
+                printf("\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+            }
         }
         printf("\n\n");
         free(temp_solution);
@@ -245,13 +266,22 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
             exitStatus = 1;
             break;
         }
+        plot_solution(inst, inst->solution, 0, 0);
+        // #ifdef _WIN32
+        //         Sleep(100);
+        // #else
+        //         sleep(0.1);
+        // #endif
     }
 
     free(nodes_order);
-    return exitStatus;
+
+    return
+            exitStatus;
 }
 
-double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int startingNode, unsigned int *sol) {
+double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int startingNode, double GRASP_alpha,
+                                     unsigned int *sol) {
     const int nodes = inst->nnodes;
 
     //NOTE: Init starting random node
@@ -270,6 +300,10 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
     for (unsigned int i = 0; i < nodes - 2; i++) {
         for (unsigned int j = i + 1; j < nodes; j++) {
             double tmpDist = get_precalculated_distance(inst, sol[i], sol[j]); // memoized
+
+            //GRASP HERE!
+            tmpDist *= 1 + GRASP_alpha * rand_0_1();
+
             if (minDist == -1 || tmpDist < minDist) {
                 minDist = tmpDist;
                 pointIndex = j;
@@ -313,6 +347,12 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
             exitStatus = 1;
             break;
         }
+        plot_solution(inst, sol, 0, 0);
+        // #ifdef _WIN32
+        //         Sleep(100);
+        // #else
+        //         sleep(0.1);
+        // #endif
     }
     return exitStatus;
 }
