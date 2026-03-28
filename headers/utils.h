@@ -105,6 +105,11 @@ unsigned int *initialize_identity_solution(unsigned int N);
  */
 void swap(void *a, void *b, size_t size);
 
+/**
+ * @brief Generates a random floating-point number between 0 and 1.
+ * 
+ * @return double A random number in the range [0, 1].
+ */
 double rand_0_1();
 
 /**

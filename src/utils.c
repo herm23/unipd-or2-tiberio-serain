@@ -10,6 +10,14 @@
 #include <stdbool.h>
 
 //region UTILITY
+/**
+ * @brief Reverses a subarray in a circular fashion within an array of unsigned integers.
+ * 
+ * @param C The array of unsigned integers.
+ * @param N The size of the array.
+ * @param l The starting index of the subarray to be reversed.
+ * @param r The ending index of the subarray to be reversed.
+ */
 void reverse_subarray_circular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r) {
     //r escluso
     unsigned int len = (N - l) + r;
@@ -26,7 +34,7 @@ void reverse_subarray_circular(unsigned int *C, unsigned int N, unsigned int l, 
 }
 
 /**
- * @brief Prints an error message and terminates the program.
+ * @brief Prints an error message to stderr and terminates the program.
  * 
  * @param err The error message to be printed.
  */
@@ -56,7 +64,7 @@ void print_array(int *array, int size) {
 }
 
 /**
- * @brief Initializes the distance matrix for the instance.
+ * @brief Initializes the distance matrix for the instance by calculating all pairwise distances.
  * 
  * @param inst Pointer to the instance structure.
  */
@@ -70,11 +78,11 @@ void init_distances(instance *inst) {
 }
 
 /**
- * @brief Shuffles an array of unsigned integers randomly using the Fisher-Yates algorithm.
+ * @brief Shuffles an array of unsigned integers randomly.
  * 
  * @param array The array to be shuffled.
  * @param N The number of elements in the array.
- * @return short Returns 0 on success, -1 if memory allocation fails.
+ * @return short Returns 0 on success.
  */
 short random_array_shuffle(unsigned int *array, const unsigned int N) {
     //Return 0 = ok
@@ -122,6 +130,11 @@ void swap(void *a, void *b, size_t size) {
     free(tmp);
 }
 
+/**
+ * @brief Generates a random floating-point number between 0 and 1.
+ * 
+ * @return double A random number in the range [0, 1].
+ */
 double rand_0_1() {
     return (double) rand() / (double) RAND_MAX;
 }
@@ -130,7 +143,7 @@ double rand_0_1() {
 
 //region MEMORY MANAGEMENT
 /**
- * @brief Frees the memory allocated for the instance.
+ * @brief Frees the memory allocated for the instance structure and its components.
  * 
  * @param inst Pointer to the instance structure to be freed.
  */
@@ -413,6 +426,11 @@ void generate_random_instance(instance *inst) {
     }
 }
 
+/**
+ * @brief Decides whether to parse a TSP file or generate a random instance based on arguments.
+ * 
+ * @param inst Pointer to the instance structure.
+ */
 void read_input(instance *inst) {
     bool has_input_file = (strcmp(inst->input_file, DEFAULT_INPUT) != 0);
     bool has_random_params = (inst->randomseed != DEFAULTSEEDVAL && inst->nnodes > 0);

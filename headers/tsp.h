@@ -87,7 +87,7 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
  * 
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the heuristic to run.
- * @param GRASP_alpha ???
+ * @param GRASP_alpha The alpha parameter for the GRASP (Greedy Randomized Adaptive Search Procedure) heuristic. It controls the degree of randomization in the construction phase: 0 is purely greedy, 1 is purely random.
  * @param refinement The refinement strategy to be applied after the heuristic.
  * @return short Returns 0 on success, non-zero if the time limit was exceeded.
  */
@@ -99,7 +99,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, double GRASP_alpha,
  * 
  * @param inst Pointer to the instance structure.
  * @param startingNode The index of the node to start the tour from. If -1, a random node is chosen.
- * @param GRASP_alpha ???
+ * @param GRASP_alpha The alpha parameter for the GRASP (Greedy Randomized Adaptive Search Procedure) heuristic. It controls the degree of randomization in the construction phase: 0 is purely greedy, 1 is purely random.
  * @param sol Pointer to the array where the resulting tour will be stored.
  * @return double The cost of the generated tour.
  */
@@ -122,7 +122,7 @@ double greedy_nn_heuristic_iteration(const instance *inst, unsigned int starting
  * @param tbest Pointer to the variable storing the time when the best solution was found.
  * @return short Returns 0 on success, non-zero if the time limit was exceeded.
  */
-short twoOpt_refinement(const instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
+short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
 
 /**
  * @brief Performs a single iteration of the 2-opt refinement.

@@ -21,11 +21,12 @@
 
 //region Plots
 /**
- * @brief Plots the tour using gnuplot by generating data and command files.
+ * @brief Plots the solution using gnuplot.
  * 
  * @param inst Pointer to the instance structure.
  * @param solution The solution array representing the tour.
- * @param only_instance Flag to plot only the instance nodes without the tour edges.
+ * @param only_instance Flag to plot only the instance nodes without the tour.
+ * @param pause Flag to pause after plotting.
  */
 void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause) {
     /* ----------- Basic error checking ----------- */
@@ -130,11 +131,11 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
 //endregion Plots
 
 /**
- * @brief Checks if a solution represents a valid Hamiltonian tour (cycle).
+ * @brief Checks if a solution represents a valid tour (Hamiltonian cycle).
  * 
  * @param inst Pointer to the instance structure.
  * @param solution The solution array to be checked.
- * @return short Returns 1 if valid, 0 if invalid or if memory allocation fails.
+ * @return short Returns 1 if the tour is valid, 0 otherwise.
  */
 short is_solution_valid(const instance *inst, const unsigned int *solution) {
     //Return 0 if valid, -1 otherways
@@ -164,6 +165,13 @@ short is_solution_valid(const instance *inst, const unsigned int *solution) {
     return 1;
 }
 
+/**
+ * @brief Calculates the total cost of a given solution.
+ *
+ * @param inst Pointer to the instance structure.
+ * @param sol The solution array representing the solution.
+ * @return double The total cost of the solution.
+ */
 double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
     double cost = 0.0;
     int N = inst->nnodes;
@@ -190,6 +198,15 @@ unsigned int index_upper(unsigned int i, unsigned int j, unsigned int N) {
     return i * N - i * (i + 1) / 2 + (j - i - 1);
 }
 
+/**
+ * @brief Sets the precalculated distance between two nodes in the distance matrix.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @param dist The distance to be set.
+ * @return short Returns 0 on success, 1 if inst is NULL, 2 if i == j.
+ */
 short set_precalculated_distance(const instance *inst, unsigned int i, unsigned int j, const double dist) {
     if (inst == NULL) return 1;
 
@@ -206,6 +223,14 @@ short set_precalculated_distance(const instance *inst, unsigned int i, unsigned 
     return 0;
 }
 
+/**
+ * @brief Retrieves the precalculated distance between two nodes from the distance matrix.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param i Index of the first node.
+ * @param j Index of the second node.
+ * @return double The precalculated distance between node i and node j, -1 if inst is NULL, 2 if i == j.
+ */
 double get_precalculated_distance(const instance *inst, unsigned int i, unsigned int j) {
     if (inst == NULL) return -1;
 
@@ -224,6 +249,15 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
 //endregion Distances
 
 
+/**
+ * @brief Executes the Nearest Neighbor (NN) heuristic to solve the TSP.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param time_limit The maximum time allowed for the heuristic to run.
+ * @param GRASP_alpha The alpha parameter for the GRASP heuristic (0 = greedy, 1 = random).
+ * @param refinement The refinement strategy to be applied after each iteration.
+ * @return short Returns 0 on success, 1 if the time limit was exceeded.
+ */
 short greedy_nn_heuristic(instance *inst, double time_limit, double GRASP_alpha,
                           const enum TSP_REFINEMENT_STRATEGY refinement) {
     printf("\t## START greedy_nn_heuristic\n");
@@ -280,6 +314,15 @@ short greedy_nn_heuristic(instance *inst, double time_limit, double GRASP_alpha,
             exitStatus;
 }
 
+/**
+ * @brief Performs a single iteration of the Nearest Neighbor heuristic starting from a specific node.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param startingNode The index of the node to start the tour from. If -1, a random node is chosen.
+ * @param GRASP_alpha The alpha parameter for the GRASP heuristic (0 = greedy, 1 = random).
+ * @param sol Pointer to the array where the resulting tour will be stored.
+ * @return double The cost of the generated tour.
+ */
 double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int startingNode, double GRASP_alpha,
                                      unsigned int *sol) {
     const int nodes = inst->nnodes;
@@ -320,6 +363,16 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
 }
 
 
+/**
+ * @brief Applies the 2-opt refinement strategy to an existing TSP solution.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param time_limit The maximum time allowed for the refinement.
+ * @param sol Pointer to the solution array to be refined.
+ * @param zbest Pointer to the variable storing the cost of the best solution found.
+ * @param tbest Pointer to the variable storing the time when the best solution was found.
+ * @return short Returns 0 on success, 1 if the time limit was exceeded.
+ */
 short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
     printf("\t\t## STARTING twoOpt_refinement\n");
 
@@ -357,6 +410,13 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
     return exitStatus;
 }
 
+/**
+ * @brief Performs a single iteration of the 2-opt refinement (best improvement).
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param sol Pointer to the solution array to be refined.
+ * @return double The improvement (reduction in cost) achieved by the iteration.
+ */
 double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
     const int nodes = inst->nnodes;
 
