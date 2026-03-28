@@ -3,8 +3,14 @@
 #include "../headers/tsp.h"
 #include "./../headers/consts.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <stdbool.h>
+
 //region UTILITY
-void reverse_subcircular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r) {
+void reverse_subarray_circular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r) {
     //r escluso
     unsigned int len = (N - l) + r;
     if (l <= r) len = r - l;
@@ -58,7 +64,7 @@ void init_distances(instance *inst) {
     inst->distances = malloc(inst->nnodes * inst->nnodes * sizeof(double)); //TODO fix this
     for (int i = 0; i < inst->nnodes; i++) {
         for (int j = i + 1; j < inst->nnodes; j++) {
-            setDistance(i, j, inst, dist(i, j, inst));
+            set_precalculated_distance(inst, i, j, calculate_distance(i, j, inst));
         }
     }
 }
@@ -70,7 +76,7 @@ void init_distances(instance *inst) {
  * @param N The number of elements in the array.
  * @return short Returns 0 on success, -1 if memory allocation fails.
  */
-short random_shuffle(unsigned int *array, const unsigned int N) {
+short random_array_shuffle(unsigned int *array, const unsigned int N) {
     //Return 0 = ok
     if (N <= 1) return -1;
 
@@ -89,7 +95,7 @@ short random_shuffle(unsigned int *array, const unsigned int N) {
  * @param N The number of nodes in the solution.
  * @return unsigned int* Pointer to the newly allocated and initialized solution array.
  */
-unsigned int *initialize_solution(const unsigned int N) {
+unsigned int *initialize_identity_solution(const unsigned int N) {
     //Keeping all unsigned (all indexes are positive)
     unsigned int *solution = malloc(N * sizeof(unsigned int));
     if (!solution) return NULL;
@@ -113,8 +119,6 @@ void swap(void *a, void *b, size_t size) {
     memcpy(tmp, a, size);
     memcpy(a, b, size);
     memcpy(b, tmp, size);
-
-    free(tmp);
 }
 
 //endregion UTILITY
@@ -150,18 +154,9 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     // default
     inst->zbest = -1;
     inst->model_type = 0;
-    inst->old_benders = 0;
-    strcpy(inst->input_file, DEFAULT_INPUT);
-    inst->randomseed = DEFAULTSEEDVAL;
-    inst->num_threads = 0;
-    inst->timelimit = CPX_INFBOUND; //USARE QUESTI
-    inst->cutoff = CPX_INFBOUND;
-    //inst->timelimit = 1e10;
-    //inst->cutoff = 1e10;
-    inst->integer_costs = 0;
-
-    inst->available_memory = 12000; // available memory, in MB, for Cplex execution (e.g., 12000)
-    inst->max_nodes = -1; // max n. of branching nodes in the final run (-1 unlimited)
+    strcpy(inst->input_file, "NULL");
+    inst->randomseed = -1;
+    inst->timelimit = 1.0E+20;
 
     int help = 0;
     if (argc < 1) help = 1;
@@ -200,34 +195,6 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->model_type = atoi(argv[++i]);
             continue;
         } // model type
-        if (strcmp(argv[i], "-old_benders") == 0) {
-            inst->old_benders = atoi(argv[++i]);
-            continue;
-        } // old benders
-        if (strcmp(argv[i], "-threads") == 0) {
-            inst->num_threads = atoi(argv[++i]);
-            continue;
-        } // n. threads
-        if (strcmp(argv[i], "-memory") == 0) {
-            inst->available_memory = atoi(argv[++i]);
-            continue;
-        } // available memory (in MB)
-        if (strcmp(argv[i], "-node_file") == 0) {
-            strcpy(inst->node_file, argv[++i]);
-            continue;
-        } // cplex's node file
-        if (strcmp(argv[i], "-max_nodes") == 0) {
-            inst->max_nodes = atoi(argv[++i]);
-            continue;
-        } // max n. of nodes
-        if (strcmp(argv[i], "-cutoff") == 0) {
-            inst->cutoff = atof(argv[++i]);
-            continue;
-        } // master cutoff
-        if (strcmp(argv[i], "-int") == 0) {
-            inst->integer_costs = 1;
-            continue;
-        } // inteher costs
         if ((strcmp(argv[i], "-help") == 0) || strcmp(argv[i], "--help") == 0) {
             help = 1;
             continue;
@@ -241,14 +208,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
         printf("-file %s\n", inst->input_file);
         printf("-time_limit %lf\n", inst->timelimit);
         printf("-model_type %d\n", inst->model_type);
-        printf("-old_benders %d\n", inst->old_benders);
         printf("-seed %d\n", inst->randomseed);
-        printf("-threads %d\n", inst->num_threads);
-        printf("-max_nodes %d\n", inst->max_nodes);
-        printf("-memory %d\n", inst->available_memory);
-        printf("-int %d\n", inst->integer_costs);
-        printf("-node_file %s\n", inst->node_file);
-        printf("-cutoff %lf\n", inst->cutoff);
         printf("\nenter -help or --help for help\n");
         printf("----------------------------------------------------------------------------------------------\n\n");
     }
@@ -267,10 +227,10 @@ void parse_command_line(int argc, char **argv, instance *inst) {
  * @param inst Pointer to the instance structure.
  * @return double The calculated distance between node i and node j.
  */
-double dist(unsigned int i, unsigned int j, const instance *inst) {
+double calculate_distance(unsigned int i, unsigned int j, const instance *inst) {
     double dx = inst->xcoord[i] - inst->xcoord[j];
     double dy = inst->ycoord[i] - inst->ycoord[j];
-    if (!inst->integer_costs) return sqrt(dx * dx + dy * dy);
+    // if (!inst->integer_costs) return sqrt(dx * dx + dy * dy);
     int dis = sqrt(dx * dx + dy * dy) + 0.499999999; // nearest integer
     return dis + 0.0;
 }
@@ -283,10 +243,10 @@ double dist(unsigned int i, unsigned int j, const instance *inst) {
  * @param inst Pointer to the instance structure.
  * @return double The calculated squared distance between node i and node j.
  */
-double distSquared(unsigned int i, unsigned int j, const instance *inst) {
+double calculate_squared_distance(unsigned int i, unsigned int j, const instance *inst) {
     double dx = inst->xcoord[i] - inst->xcoord[j];
     double dy = inst->ycoord[i] - inst->ycoord[j];
-    if (!inst->integer_costs) return (dx * dx + dy * dy);
+    // if (!inst->integer_costs) return (dx * dx + dy * dy);
     int dis = (dx * dx + dy * dy) + 0.499999999; // nearest integer
     return dis + 0.0;
 }
@@ -301,15 +261,14 @@ double distSquared(unsigned int i, unsigned int j, const instance *inst) {
  */
 
 //WARNING: Does it makes sense to print_error and exit program ?
-void parse_tsp_file(instance *inst){
+void parse_tsp_file(instance *inst) {
     FILE *fin = fopen(inst->input_file, "r");
     if (fin == NULL) {
         print_error(" input file not found!");
     }
 
     inst->nnodes = -1;
-    inst->depot = -1;
-    inst->nveh = -1;
+    inst->plot = NULL;
 
     char line[180];
     char *par_name;
@@ -421,21 +380,17 @@ void generate_random_instance(instance *inst) {
         print_error("Invalid random seed passed");
     }
 
-    //NOTE: Same as in the tsp parser, must be removed ?
-    inst->depot = -1;
-    inst->nveh = -1;   
-
     inst->xcoord = (double *) calloc(inst->nnodes, sizeof(double));
     inst->ycoord = (double *) calloc(inst->nnodes, sizeof(double));
-    
+
     if (inst->xcoord == NULL || inst->ycoord == NULL) {
         print_error("Memory allocation failed in generate_random_instance");
     }
 
     srand(inst->randomseed);
-    for(int i = 0; i < inst->nnodes; i++) {
-        inst->xcoord[i] = ((double)rand() / (double)RAND_MAX) * XMAX;
-        inst->ycoord[i] = ((double)rand() / (double)RAND_MAX) * YMAX;
+    for (int i = 0; i < inst->nnodes; i++) {
+        inst->xcoord[i] = ((double) rand() / (double) RAND_MAX) * XMAX;
+        inst->ycoord[i] = ((double) rand() / (double) RAND_MAX) * YMAX;
     }
 
     if (VERBOSE >= 10) {

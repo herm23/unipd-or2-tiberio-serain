@@ -1,56 +1,36 @@
+// DO NOT IMPORT THIS!
+
 #ifndef UTILS_H
 #define UTILS_H
-
+#include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <cplex.h>
-#include <stdbool.h>
+
 
 //region STRUCTURES
-//TODO: Check used variables
 typedef struct {
     int nnodes;
-    double *demand;
     double *xcoord;
     double *ycoord;
     double *distances;
-    int depot;
-    double capacity;
-    int nveh;
 
     // parameters
-    //NOTE: The fields randomseed and num_nodes must be used togheter
     int randomseed;
     int model_type;
-    int old_benders;
-    int num_threads;
     double timelimit; // overall time limit, in sec.s
     char input_file[1000]; // input file
-    char node_file[1000]; // cplex node file
-    int available_memory;
-    int max_nodes; // max n. of branching nodes in the final run (-1 unlimited)
-    double cutoff; // cutoff (upper bound) for master
-    int integer_costs;
 
     //global data
-    double tstart;
     double zbest; // best sol. available
     double tbest; // time for the best sol. available
-    double *best_sol; // best sol. available
-    double best_lb; // best lower bound available
 
-    // model;
-    //@COMPLEX@: Offsets for different sets of variables (x, u, etc.) in the CPLEX model's flattened variable array.
-    int xstart;
-    int qstart;
-    int bigqstart;
-    int sstart;
-    int bigsstart;
-    int ystart;
-    int fstart;
-    int zstart;
+    double zstart;
+    double tstart;
+
+    unsigned int *solution; // best sol. available
+
+    FILE *plot;
 } instance;
+
 //endregion STRUCTURES
 
 //region MATH UTILITIES
@@ -84,7 +64,7 @@ inline double dmax(double d1, double d2) { return (d1 > d2) ? d1 : d2; }
 //endregion MATH UTILITIES
 
 //region UTILITY
-void reverse_subcircular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r);
+void reverse_subarray_circular(unsigned int *C, unsigned int N, unsigned int l, unsigned int r);
 
 /**
  * @brief Shuffles an array of unsigned integers randomly.
@@ -93,7 +73,7 @@ void reverse_subcircular(unsigned int *C, unsigned int N, unsigned int l, unsign
  * @param N The number of elements in the array.
  * @return short Returns 0 on success, non-zero on error.
  */
-short random_shuffle(unsigned int *array, unsigned int N);
+short random_array_shuffle(unsigned int *array, unsigned int N);
 
 /**
  * @brief Initializes a solution array with an identity mapping (0, 1, 2, ..., N-1).
@@ -101,7 +81,7 @@ short random_shuffle(unsigned int *array, unsigned int N);
  * @param N The number of nodes in the solution.
  * @return unsigned int* Pointer to the newly allocated and initialized solution array.
  */
-unsigned int *initialize_solution(unsigned int N);
+unsigned int *initialize_identity_solution(unsigned int N);
 
 /**
  * @brief Generic swap function for two elements of a given size.
@@ -165,7 +145,7 @@ void init_distances(instance *inst);
  * @param inst Pointer to the instance structure.
  * @return double The calculated distance between node i and node j.
  */
-double dist(unsigned int i, unsigned int j, const instance *inst);
+double calculate_distance(unsigned int i, unsigned int j, const instance *inst);
 
 /**
  * @brief Calculates the squared distance between two nodes.
@@ -175,7 +155,8 @@ double dist(unsigned int i, unsigned int j, const instance *inst);
  * @param inst Pointer to the instance structure.
  * @return double The calculated squared distance between node i and node j.
  */
-double distSquared(unsigned int i, unsigned int j, const instance *inst);
+double calculate_squared_distance(unsigned int i, unsigned int j, const instance *inst);
+
 //endregion UTILITY
 
 #endif

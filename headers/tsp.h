@@ -6,20 +6,19 @@
 #define UNIPD_OR2_TIBERIO_SERAIN_TSP_H
 
 #include "utils.h"
-#include <math.h>
-#include <string.h>
 
-// #include <pthread.h>
-
+//region Plots
 /**
- * @brief Plots the tour using an external tool (e.g., gnuplot).
+ * @brief Plots the solution using gnuplot
  * 
  * @param inst Pointer to the instance structure.
  * @param solution The solution array representing the tour.
  * @param only_instance Flag to plot only the instance nodes without the tour.
  */
-void plot_tour(const instance *inst, const unsigned int *solution, int only_instance, FILE **windows, int *count);
-void close_all_plots(FILE **windows, int count);
+void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause);
+
+
+//endregion Plots
 
 /**
  * @brief Checks if a solution represents a valid tour (Hamiltonian cycle).
@@ -28,29 +27,44 @@ void close_all_plots(FILE **windows, int count);
  * @param solution The solution array to be checked.
  * @return short Returns 0 if the tour is valid, non-zero otherwise.
  */
-short check_tour(const instance *inst, const unsigned int *solution);
+short is_solution_valid(const instance *inst, const unsigned int *solution);
 
-short setDistance(unsigned int i, unsigned int j, const instance *inst, double dist);
-
-double getDistance(unsigned int i, unsigned int j, const instance *inst);
-
-//TODO: Remove method
 /**
- * @brief Optimizes the TSP using CPLEX.
- * 
+ * @brief Calculates the total cost of a given solution.
+ *
  * @param inst Pointer to the instance structure.
- * @param sol Pointer to the solution array to be updated with the optimized tour.
+ * @param sol The solution array representing the solution.
+ * @return double The total cost of the solution.
  */
-void TSPopt(instance *inst, unsigned int *sol);
+double calculate_solution_cost(const instance *inst, const unsigned int *sol);
 
-short tspNNBatch(instance *inst, unsigned int *sol);
+//region Distances
 
-//TODO: Manage errors
-double tspNN(instance *inst, unsigned int startingNode, unsigned int *sol);
+short set_precalculated_distance(const instance *inst, unsigned int i, unsigned int j, double dist);
 
-short TwoOpt_refinement(instance *inst, unsigned int *sol);
+double get_precalculated_distance(const instance *inst, unsigned int i, unsigned int j);
 
-double TwoOpt_refinement_iteration(instance *inst, unsigned int *sol);
+//endregion Distances
+
+
+//region Heuristics
+
+//region NN
+short greedy_nn_heuristic(instance *inst, unsigned int *sol);
+
+double greedy_nn_heuristic_iteration(const instance *inst, unsigned int startingNode, unsigned int *sol);
+
+//endregion NN
+
+//endregion Heuristics
+
+
+//region Refinements
+short twoOpt_refinement(instance *inst, unsigned int *sol);
+
+double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol);
+
+//endregion Refinements
 
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H

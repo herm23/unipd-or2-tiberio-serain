@@ -3,6 +3,15 @@
 #include "./headers/tsp.h"
 #include "./headers/chrono.h"
 #include <cplex.h>
+#include <string.h>
+
+
+enum TSP_SOLVING_STRATEGY {
+    LOW
+};
+
+
+short TSP_OPT(instance *inst);
 
 /**
  * @brief The main entry point of the program.
@@ -12,7 +21,6 @@
  * @return int Returns 0 on success, 1 on error.
  */
 int main(int argc, char **argv) {
-    //NOTE: No parameteres included
     if (argc < 2) {
         printf("Usage: %s -help for help\n", argv[0]);
         exit(1);
@@ -22,80 +30,69 @@ int main(int argc, char **argv) {
         printf("\n");
     }
 
-    FILE *plots[20] = {NULL};
-    int plot_count = 0;
-
-    double t1 = second();
     instance inst;
 
-    //NOTE: Managing input
+
+    const double t1 = second();
     parse_command_line(argc, argv, &inst);
     read_input(&inst);
     init_distances(&inst);
 
-    //NOTE: Init Computation
-    unsigned int *solution = initialize_solution(inst.nnodes);
 
-    // printf("Initialized identity solution is ");
-    // if (check_tour(&inst, solution) != 0) {
-    //     printf("NOT ");
-    // }
-    // printf("VALID\n");
+    TSP_OPT(&inst);
 
-    // const short permutation_status = random_shuffle(solution, inst.nnodes);
-    // //@COMPLEX@: Random shuffle is used to generate an initial solution for testing purposes.
-    // if (permutation_status != 0) {
-    //     free(solution);
-    //     free_instance(&inst);
-    //     print_error("Error while calculating random permutation!");
-    //     return 1;
-    // }
-
-    short check_solution = check_tour(&inst, solution);
+    short check_solution = is_solution_valid(&inst, inst.solution);
     if (check_solution != 0) {
-        free(solution);
         free_instance(&inst);
-        print_error("Solution after random shuffle is NOT VALID!");
-        return 1;
-    }
-
-    plot_tour(&inst, solution, 1, plots, &plot_count);
-    plot_tour(&inst, solution, 0, plots, &plot_count);
-
-    //TODO: Gestire con enumeratore da riga di comando
-
-    tspNNBatch(&inst, solution);
-    plot_tour(&inst, solution, 0, plots, &plot_count);
-
-    TwoOpt_refinement(&inst, solution);
-    plot_tour(&inst, solution, 0, plots, &plot_count);
-
-    check_solution = check_tour(&inst, solution);
-    if (check_solution != 0) {
-        free(solution);
-        free_instance(&inst);
-        print_error("Solution OPT is NOT VALID!");
+        print_error("Solution found is NOT VALID!");
         return 1;
     }
 
     if (VERBOSE >= 1000) {
+        printf("FINAL SOLUTION:\n");
         for (unsigned int i = 0; i < inst.nnodes; ++i) {
-            printf("%d --> %d\n", i, solution[i]);
+            printf("%d --> %d\n", i, inst.solution[i]);
         }
     }
 
-    double t2 = second();
+    const double t2 = second();
 
     if (VERBOSE >= 1) {
-        printf("... TSP problem solved in %lf sec.s\n", t2 - t1);
+        printf("Program terminated in %lf sec.s\n", t2 - t1);
     }
 
-    printf("\nPress ENTER to close the graph and exit the program...");
-    getchar();
 
-    close_all_plots(plots, plot_count);
-
-    free(solution);
     free_instance(&inst);
+    return 0;
+}
+
+
+short TSP_OPT(instance *inst) {
+    const double starting_time = second();
+
+    // INIT
+    unsigned int *initial_solution = initialize_identity_solution(inst->nnodes);
+    plot_solution(inst, initial_solution, 1, 1);
+    plot_solution(inst, initial_solution, 0, 1);
+
+
+    inst->solution = initialize_identity_solution(inst->nnodes);
+    const double solution_cost = calculate_solution_cost(inst, initial_solution);
+    inst->tbest = starting_time;
+    inst->tstart = starting_time;
+
+    inst->zbest = solution_cost;
+    inst->zstart = solution_cost;
+
+    printf("## COST %15lf AT TIME 0\n", solution_cost);
+
+    plot_solution(inst, initial_solution, 0, 0);
+
+    greedy_nn_heuristic(inst, initial_solution);
+    plot_solution(inst, initial_solution, 0, 0);
+
+    twoOpt_refinement(inst, initial_solution);
+    plot_solution(inst, initial_solution, 0, 0);
+
     return 0;
 }
