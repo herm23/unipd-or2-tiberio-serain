@@ -1,21 +1,18 @@
 # Traveling Salesman Problem (TSP) Solver
 
-This repository contains a C-based solver for the Traveling Salesman Problem (TSP), developed as part of the Operations Research 2 (OR2) course at the University of Padua (unipd). The solver leverages **IBM ILOG CPLEX** to find optimal or near-optimal solutions and uses **GNUplot** for visualization.
+This repository contains a C-based solver for the Traveling Salesman Problem (TSP), developed as part of the Operations Research 2 (OR2) course at the University of Padua (unipd). The solver implements various heuristics and meta-heuristics, and is designed to integrate with **IBM ILOG CPLEX** for exact methods. It uses **GNUplot** for solution visualization.
 
 ## Overview
 
-The project implements various mathematical models and heuristics to solve the TSP. It reads problem instances in the standard TSPLIB format, processes them using a CPLEX-based optimization engine, and outputs the results including the total cost and execution time.
+The project implements various mathematical models and heuristics to solve the TSP. It reads problem instances in the standard TSPLIB format, processes them using a set of optimization algorithms (Nearest Neighbor, 2-opt refinement, etc.), and outputs the results including the total cost and execution time.
 
 ## Requirements
 
 ### Software
 - **C Compiler**: A C11-compliant compiler (e.g., GCC/MinGW, MSVC, Clang).
-- **CMake**: Version 4.0 or higher.
-- **IBM ILOG CPLEX Studio**: The project is configured for version 22.1.2. Ensure the `CPLEX_ROOT` path in `CMakeLists.txt` matches your installation directory. Support is available for both Linux and macOS (Apple Silicon).
-- **GNUplot**: Optional, required for solution visualization (`plot_tour`).
-
-### Environment Variables
-- Ensure CPLEX binary directories are in your system's `PATH` (especially on Windows to find `.dll` files at runtime).
+- **CMake**: Version 3.10 or higher.
+- **IBM ILOG CPLEX Studio** (Optional): Required for exact optimization models. Ensure the `CPLEX_ROOT` path is correctly configured in `CMakeLists.txt` or passed as a CMake variable.
+- **GNUplot**: Optional, required for solution visualization.
 
 ## Setup & Build
 
@@ -25,29 +22,17 @@ The project implements various mathematical models and heuristics to solve the T
    cd unipd-or2-tiberio-serain
    ```
 
-2. **Configure CPLEX path**:
-   You can either modify the `CPLEX_ROOT` variable in `CMakeLists.txt`:
-   ```cmake
-   set(CPLEX_ROOT "C:\\Program Files\\IBM\\ILOG\\CPLEX_Studio_Community2212")
-   ```
-   Or, more conveniently, provide it as a CMake variable during configuration:
+2. **Configure and build the project**:
    ```powershell
-   cmake -DCPLEX_ROOT="/path/to/your/CPLEX_Studio2212" ..
-   ```
-
-3. **Build the project using CMake**:
-   ```powershell
-   # On macOS/Linux
    mkdir build
    cd build
-   cmake -DCPLEX_ROOT="~/Applications/CPLEX_Studio2212" ..
-   cmake --build . --target unipd_or2_tiberio_serain
+   cmake ..
+   cmake --build . --target unipd_or2_tiberio_serain --config Release
+   ```
 
-   # On Windows
-   mkdir build
-   cd build
+   *Note: If you want to use CPLEX, specify the path during configuration:*
+   ```powershell
    cmake -DCPLEX_ROOT="C:\Program Files\IBM\ILOG\CPLEX_Studio2212" ..
-   cmake --build . --target unipd_or2_tiberio_serain --config Debug
    ```
 
 ## Running the Solver
@@ -56,42 +41,27 @@ The executable accepts several command-line arguments to control the optimizatio
 
 ### Basic Usage
 ```powershell
-./unipd_or2_tiberio_serain -file ../att48.tsp -model_type 0 -time_limit 3600
+./unipd_or2_tiberio_serain -file ../res/att48.tsp -model_type 0 -time_limit 3600
 ```
 
 ### Supported Arguments
 | Argument | Description | Default |
 |----------|-------------|---------|
 | `-file` / `-f` / `-input` | Path to the `.tsp` input file | `NULL` |
-| `-time_limit` | Maximum execution time in seconds | `CPX_INFBOUND` |
-| `-model_type` / `-model` | Type of mathematical model to use (0, 1, ...) | `0` |
-| `-seed` | Random seed for stochastic components | `0` |
-| `-threads` | Number of threads for CPLEX | `0` (auto) |
-| `-memory` | Available memory in MB for CPLEX | `12000` |
-| `-max_nodes` | Maximum number of branching nodes | `-1` (unlimited) |
-| `-cutoff` | Upper bound for the objective function | `CPX_INFBOUND` |
-| `-int` | Use integer costs | `0` (false) |
+| `-nodes_count` | Number of nodes for random instances | - |
+| `-time_limit` | Maximum execution time in seconds | `1.0E+20` |
+| `-model_type` / `-model` | Type of heuristic/strategy to use | `0` |
+| `-seed` | Random seed for stochastic components | `-1` |
 | `-help` | Show available parameters | - |
 
 ## Project Structure
 
-- `main.c`: Entry point, handles command-line parsing and high-level execution flow. Segmented into regions (MAIN, PARSER, etc.) with detailed verbosity level documentation.
-- `tsp.c` / `tsp.h`: Core TSP logic, data structures, and CPLEX model implementations.
-- `utils.c` / `utils.h`: Shared utility functions, distance calculations, and TSPLIB parsing logic.
-- `chrono.c` / `chrono.h`: Utility functions for precise timing and performance measurement.
-- `consts.h`: Global constants and verbosity level definitions.
-
-### Code Style & Documentation
-The codebase adheres to the following standards across all files:
-- **Javadoc-style comments**: Every function and significant data structure includes `@brief`, `@param`, and `@return` tags for clear interface documentation.
-- **Complex logic tagging**: Sections with non-trivial implementation details (e.g., Fisher-Yates shuffle, CPLEX variable mapping, Hamiltonian cycle validation) are marked with `//@COMPLEX@: <explanation>` to assist in code review and maintenance.
-- **Region segmentation**: Logical groups of functions, declarations, and data structures are enclosed in `#region` and `#endregion` tags for improved IDE navigation (compatible with CLion, VS Code, etc.).
-- **Verbosity levels**: Standardized logging throughout the program, controlled by the `VERBOSE` constant.
-
-- `att48.tsp`: Sample TSP instance (48 cities in the US).
-- `prompts/`: Contains documentation regarding prompt engineering used during development.
-- `plot/`: Data and commands for GNUplot visualization.
-- `old_template/`: Legacy files and alternative implementations.
+- `main.c`: Entry point, handles command-line parsing and high-level execution flow.
+- `src/tsp.c` / `headers/tsp.h`: Core TSP logic, construction heuristics (NN, GRASP), and refinement strategies (2-opt).
+- `src/utils.c` / `headers/utils.h`: Shared utility functions, distance calculations, and TSPLIB parsing logic.
+- `src/chrono.c` / `headers/chrono.h`: Utility functions for precise timing and performance measurement.
+- `headers/consts.h`: Global constants and verbosity level definitions.
+- `res/`: Contains TSP instances (e.g., `att48.tsp`).
 
 ## Scripts
 
