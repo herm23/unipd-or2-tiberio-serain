@@ -1,7 +1,3 @@
-//
-// Created by filip on 28/02/2026.
-//
-
 #ifndef UNIPD_OR2_TIBERIO_SERAIN_TSP_H
 #define UNIPD_OR2_TIBERIO_SERAIN_TSP_H
 

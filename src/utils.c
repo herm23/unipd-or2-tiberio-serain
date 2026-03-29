@@ -424,6 +424,7 @@ void generate_random_instance(instance *inst) {
     if (VERBOSE >= 10) {
         printf(" ... generated random instance with %d nodes and seed %u\n", inst->nnodes, inst->randomseed);
     }
+    inst->plot = NULL;
 }
 
 /**
