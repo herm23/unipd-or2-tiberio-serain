@@ -43,6 +43,9 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    printf("## COST %15lf AT TIME %lf\n", inst.zbest, inst.tbest);
+
+
     if (VERBOSE >= 1000) {
         printf("FINAL SOLUTION:\n");
         for (unsigned int i = 0; i < inst.nnodes; ++i) {
@@ -85,13 +88,13 @@ short TSP_OPT(instance *inst) {
     inst->zbest = solution_cost;
     inst->zstart = solution_cost;
 
-    printf("## COST %15lf AT TIME 0\n", solution_cost);
+    printf("\n\n## FINAL OPTIMAL / INCUMBEMT SOLUTION WITH COST %15lf FOUND AT TIME 0\n", solution_cost);
 
     unsigned int *temp_solution = NULL;
     double temp_solution_cost;
     double curr_time;
 
-    enum TSP_SOLVING_STRATEGY strategy = NN_TWO_OPT_MULTISTART;
+    enum TSP_SOLVING_STRATEGY strategy = GRASP_TWO_OPT_MULTISTART;
 
     switch (strategy) {
         case NN:
@@ -128,14 +131,15 @@ short TSP_OPT(instance *inst) {
             greedy_nn_heuristic(inst, inst->timelimit, 0.1, TWO_OPT);
             break;
         case GRASP_AND_TWO_OPT:
-            greedy_nn_heuristic(inst, inst->timelimit, 0.1, NONE);
+            printf("Running GRASP and 2-opt refinement with 20%% (%lf) time limit for GRASP and 80%% (%lf) for 2-opt refinement\n", inst->timelimit * 0.2, inst->timelimit * 0.8);
+            greedy_nn_heuristic(inst, inst->timelimit * 0.2, 0.1, NONE);
 
             temp_solution = initialize_identity_solution(inst->nnodes);
             memcpy(temp_solution, inst->solution, sizeof(unsigned int) * inst->nnodes);
             temp_solution_cost = inst->zbest;
             curr_time = inst->tbest;
 
-            twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
+            twoOpt_refinement(inst, inst->timelimit * 0.8, temp_solution, &temp_solution_cost, &curr_time);
 
             if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
                 if (is_solution_valid(inst, temp_solution)) {

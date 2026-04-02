@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include <stdbool.h>
 
 //region UTILITY
@@ -217,7 +218,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             help = 1;
             continue;
         } // help
-        help = 1;
+        //help = 1;
     }
 
     if (help || (VERBOSE >= 10)) // print current parameters
@@ -404,9 +405,9 @@ void generate_random_instance(instance *inst) {
     if (inst->nnodes <= 0) {
         print_error_and_die("Invalid number of nodes for random generation");
     }
-    if (inst->randomseed == DEFAULTSEEDVAL) {
-        print_error_and_die("Invalid random seed passed");
-    }
+    // if (inst->randomseed == DEFAULTSEEDVAL) {
+    //     print_error_and_die("Invalid random seed passed");
+    // }
 
     inst->xcoord = (double *) calloc(inst->nnodes, sizeof(double));
     inst->ycoord = (double *) calloc(inst->nnodes, sizeof(double));
@@ -415,7 +416,12 @@ void generate_random_instance(instance *inst) {
         print_error_and_die("Memory allocation failed in generate_random_instance");
     }
 
-    srand(inst->randomseed);
+    if (inst->randomseed != DEFAULTSEEDVAL) {
+        srand(inst->randomseed);
+    }else {
+        srand(time(0));
+    }
+
     for (int i = 0; i < inst->nnodes; i++) {
         inst->xcoord[i] = ((double) rand() / (double) RAND_MAX) * XMAX;
         inst->ycoord[i] = ((double) rand() / (double) RAND_MAX) * YMAX;
@@ -434,7 +440,8 @@ void generate_random_instance(instance *inst) {
  */
 void read_input(instance *inst) {
     bool has_input_file = (strcmp(inst->input_file, DEFAULT_INPUT) != 0);
-    bool has_random_params = (inst->randomseed != DEFAULTSEEDVAL && inst->nnodes > 0);
+    bool has_random_params = (inst->nnodes > 0);
+    //bool has_random_params = (inst->randomseed != DEFAULTSEEDVAL && inst->nnodes > 0);
 
     if (has_input_file && has_random_params) {
         print_error_and_die("Invalid commands: please pass the input file OR the random instance");
