@@ -7,14 +7,17 @@ enum TSP_SOLVING_STRATEGY {
     NN,
     NN_TWO_OPT_MULTISTART,
     NN_AND_TWO_OPT,
+    NN_AND_VNS,
     GRASP,
     GRASP_TWO_OPT_MULTISTART,
     GRASP_AND_TWO_OPT,
+    GRASP_AND_VNS
 };
 
 enum TSP_REFINEMENT_STRATEGY {
     NONE,
-    TWO_OPT
+    TWO_OPT,
+    VNS
 };
 
 
@@ -83,12 +86,10 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
  * 
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the heuristic to run.
- * @param GRASP_alpha The alpha parameter for the GRASP (Greedy Randomized Adaptive Search Procedure) heuristic. It controls the degree of randomization in the construction phase: 0 is purely greedy, 1 is purely random.
  * @param refinement The refinement strategy to be applied after the heuristic.
  * @return short Returns 0 on success, non-zero if the time limit was exceeded.
  */
-short greedy_nn_heuristic(instance *inst, double time_limit, double GRASP_alpha,
-                          enum TSP_REFINEMENT_STRATEGY refinement);
+short greedy_nn_heuristic(instance *inst, double time_limit, enum TSP_REFINEMENT_STRATEGY refinement);
 
 /**
  * @brief Performs a single iteration of the Nearest Neighbor heuristic starting from a specific node.

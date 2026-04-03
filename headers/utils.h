@@ -24,6 +24,10 @@ typedef struct {
     double timelimit; // overall time limit, in sec.s
     char input_file[1000]; // input file
 
+    // technique hyperparams
+    double GRASP_alpha; //The alpha parameter for the GRASP heuristic (0 = greedy, 1 = random).
+    int VNS_kick_counter;
+
     //global data
     double zbest; // best sol. available
     double tbest; // time for the best sol. available

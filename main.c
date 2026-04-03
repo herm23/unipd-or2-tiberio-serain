@@ -94,66 +94,115 @@ short TSP_OPT(instance *inst) {
     double temp_solution_cost;
     double curr_time;
 
-    enum TSP_SOLVING_STRATEGY strategy = GRASP_TWO_OPT_MULTISTART;
+    // enum TSP_SOLVING_STRATEGY strategy = GRASP_TWO_OPT_MULTISTART;
+    enum TSP_SOLVING_STRATEGY strategy = NN_AND_TWO_OPT;
+
+    //NOTE: Managing hyperparameters without code duplication
+    //Hard-code for now
+    switch (strategy)
+    {
+         case NN:
+         case NN_TWO_OPT_MULTISTART:
+         case NN_AND_TWO_OPT:
+            {
+                inst->GRASP_alpha = 0;
+                inst->VNS_kick_counter = 0;
+            }
+            break;
+        case NN_AND_VNS:
+            {
+                inst->GRASP_alpha = 0;
+                inst->VNS_kick_counter = 3;
+            }
+            break;
+        case GRASP:
+        case GRASP_TWO_OPT_MULTISTART:
+        case GRASP_AND_TWO_OPT:
+            {
+                inst->GRASP_alpha = 0.1;
+                inst->VNS_kick_counter = 0;
+            }
+            break;
+    }
 
     switch (strategy) {
         case NN:
-            greedy_nn_heuristic(inst, inst->timelimit, 0, NONE);
+            {
+                greedy_nn_heuristic(inst, inst->timelimit, NONE);
+            }
             break;
         case NN_TWO_OPT_MULTISTART:
-            greedy_nn_heuristic(inst, inst->timelimit, 0, TWO_OPT);
+            {
+                greedy_nn_heuristic(inst, inst->timelimit, TWO_OPT);
+            }
             break;
         case NN_AND_TWO_OPT:
-            greedy_nn_heuristic(inst, inst->timelimit, 0, NONE);
-
-            temp_solution = initialize_identity_solution(inst->nnodes);
-            memcpy(temp_solution, inst->solution, sizeof(unsigned int) * inst->nnodes);
-            temp_solution_cost = inst->zbest;
-            curr_time = inst->tbest;
-
-            twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
-
-            if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
-                if (is_solution_valid(inst, temp_solution)) {
-                    inst->zbest = temp_solution_cost;
-                    inst->tbest = curr_time;
-                    memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
-                } else {
-                    printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+            {
+                //NOTE: 2OPT performed externally from multy start NN
+                greedy_nn_heuristic(inst, inst->timelimit, NONE);
+                
+                temp_solution = initialize_identity_solution(inst->nnodes);
+                memcpy(temp_solution, inst->solution, sizeof(unsigned int) * inst->nnodes);
+                temp_solution_cost = inst->zbest;
+                curr_time = inst->tbest;
+                
+                twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
+                
+                if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
+                    if (is_solution_valid(inst, temp_solution)) {
+                        inst->zbest = temp_solution_cost;
+                        inst->tbest = curr_time;
+                        memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
+                    } else {
+                        printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+                    }
                 }
             }
-
+            break;
+        case NN_AND_VNS:
+            {
+                greedy_nn_heuristic(inst, inst->timelimit, NONE);
+            }
             break;
         case GRASP:
-            greedy_nn_heuristic(inst, inst->timelimit, 0.1, NONE);
+            {
+                greedy_nn_heuristic(inst, inst->timelimit, NONE);
+            }
             break;
         case GRASP_TWO_OPT_MULTISTART:
-            greedy_nn_heuristic(inst, inst->timelimit, 0.1, TWO_OPT);
+            {
+                greedy_nn_heuristic(inst, inst->timelimit, TWO_OPT);
+            }
             break;
         case GRASP_AND_TWO_OPT:
-            printf("Running GRASP and 2-opt refinement with 20%% (%lf) time limit for GRASP and 80%% (%lf) for 2-opt refinement\n", inst->timelimit * 0.2, inst->timelimit * 0.8);
-            greedy_nn_heuristic(inst, inst->timelimit * 0.2, 0.1, NONE);
-
-            temp_solution = initialize_identity_solution(inst->nnodes);
-            memcpy(temp_solution, inst->solution, sizeof(unsigned int) * inst->nnodes);
-            temp_solution_cost = inst->zbest;
-            curr_time = inst->tbest;
-
-            twoOpt_refinement(inst, inst->timelimit * 0.8, temp_solution, &temp_solution_cost, &curr_time);
-
-            if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
-                if (is_solution_valid(inst, temp_solution)) {
-                    inst->zbest = temp_solution_cost;
-                    inst->tbest = curr_time;
-                    memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
-                } else {
-                    printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+            {
+                printf("Running GRASP and 2-opt refinement with 20%% (%lf) time limit for GRASP and 80%% (%lf) for 2-opt refinement\n", inst->timelimit * 0.2, inst->timelimit * 0.8);
+                greedy_nn_heuristic(inst, inst->timelimit * 0.2, NONE);
+                
+                temp_solution = initialize_identity_solution(inst->nnodes);
+                memcpy(temp_solution, inst->solution, sizeof(unsigned int) * inst->nnodes);
+                temp_solution_cost = inst->zbest;
+                curr_time = inst->tbest;
+                
+                twoOpt_refinement(inst, inst->timelimit * 0.8, temp_solution, &temp_solution_cost, &curr_time);
+                
+                if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
+                    if (is_solution_valid(inst, temp_solution)) {
+                        inst->zbest = temp_solution_cost;
+                        inst->tbest = curr_time;
+                        memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
+                    } else {
+                        printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+                    }
                 }
             }
             break;
 
         default:
-            printf("ERROR: Unknown solving strategy\n");
+            {
+                printf("ERROR: Unknown solving strategy\n");
+            }
+            break;
     }
     plot_solution(inst, inst->solution, 0, 1);
     return 0;
