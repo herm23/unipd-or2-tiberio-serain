@@ -451,7 +451,7 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbe
     int p2 = -1;
 
     //NOTE: I'd like p1 p2 further one from another
-    while (p1 != p2 && abs(p1 - p2) > (inst->nnodes * 0.4))
+    while (!(p1 != p2 && abs(p1 - p2) > (inst->nnodes * 0.25)))
     {
         p1 = (int)(rand_0_1() * inst->nnodes);
         p2 = (int)(rand_0_1() * inst->nnodes);
@@ -488,7 +488,7 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbe
 
     *tbest = curr_time;
 
-    memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+    memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
     free(temp_solution);
 
     if (time_limit != 0 && curr_time > time_limit)

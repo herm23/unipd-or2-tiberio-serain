@@ -66,6 +66,45 @@ int main(int argc, char **argv) {
 
 
 /**
+ * @brief Tenta di aggiornare la soluzione migliore dell'istanza con una nuova proposta.
+ */
+void update_instance_solution(instance *inst, unsigned int *new_sol, double new_cost, double new_time) {
+    if (inst->zbest < 0 || new_cost < inst->zbest) {
+        if (is_solution_valid(inst, new_sol)) {
+            inst->zbest = new_cost;
+            inst->tbest = new_time;
+            memcpy(inst->solution, new_sol, sizeof(unsigned int) * inst->nnodes);
+        } else {
+            printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
+        }
+    }
+}
+
+/**
+ * @brief Execute the refinement VNS: 2-opt -> Kick -> 2-opt.
+ */
+void apply_vns_refinement(instance *inst, double timelimit, unsigned int *sol, double *cost, double *time) {
+    twoOpt_refinement(inst, timelimit, sol, cost, time);
+    vns_kick(inst, timelimit, sol, cost, time);
+
+    //Debug
+    //plot_solution(inst, sol, 0, 1);
+
+    twoOpt_refinement(inst, timelimit, sol, cost, time);
+}
+
+/**
+ * @brief Prepara una soluzione temporanea partendo da quella attuale dell'istanza.
+ */
+unsigned int* prepare_temp_solution(instance *inst, double *cost, double *time) {
+    unsigned int *temp = initialize_identity_solution(inst->nnodes);
+    memcpy(temp, inst->solution, sizeof(unsigned int) * inst->nnodes);
+    *cost = inst->zbest;
+    *time = inst->tbest;
+    return temp;
+}
+
+/**
  * @brief Optimizes the TSP instance using the chosen heuristic.
  * 
  * @param inst Pointer to the instance structure.
@@ -95,7 +134,7 @@ short TSP_OPT(instance *inst) {
     double curr_time;
 
     // enum TSP_SOLVING_STRATEGY strategy = GRASP_TWO_OPT_MULTISTART;
-    enum TSP_SOLVING_STRATEGY strategy = NN_AND_TWO_OPT;
+    enum TSP_SOLVING_STRATEGY strategy = NN_AND_VNS;
 
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
@@ -127,83 +166,55 @@ short TSP_OPT(instance *inst) {
 
     switch (strategy) {
         case NN:
-            {
-                greedy_nn_heuristic(inst, inst->timelimit, NONE);
-            }
+        case GRASP: // In questo caso GRASP usa il comportamento base (NONE)
+            greedy_nn_heuristic(inst, inst->timelimit, NONE);
             break;
+
         case NN_TWO_OPT_MULTISTART:
-            {
-                greedy_nn_heuristic(inst, inst->timelimit, TWO_OPT);
-            }
-            break;
-        case NN_AND_TWO_OPT:
-            {
-                //NOTE: 2OPT performed externally from multy start NN
-                greedy_nn_heuristic(inst, inst->timelimit, NONE);
-                
-                temp_solution = initialize_identity_solution(inst->nnodes);
-                memcpy(temp_solution, inst->solution, sizeof(unsigned int) * inst->nnodes);
-                temp_solution_cost = inst->zbest;
-                curr_time = inst->tbest;
-                
-                twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
-                
-                if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
-                    if (is_solution_valid(inst, temp_solution)) {
-                        inst->zbest = temp_solution_cost;
-                        inst->tbest = curr_time;
-                        memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
-                    } else {
-                        printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
-                    }
-                }
-            }
-            break;
-        case NN_AND_VNS:
-            {
-                greedy_nn_heuristic(inst, inst->timelimit, NONE);
-            }
-            break;
-        case GRASP:
-            {
-                greedy_nn_heuristic(inst, inst->timelimit, NONE);
-            }
-            break;
         case GRASP_TWO_OPT_MULTISTART:
-            {
-                greedy_nn_heuristic(inst, inst->timelimit, TWO_OPT);
-            }
+            greedy_nn_heuristic(inst, inst->timelimit, TWO_OPT);
             break;
+
+        case NN_VNS_MULTISTART:
+        case GRASP_VNS_MULTISTART:
+            greedy_nn_heuristic(inst, inst->timelimit, VNS);
+            break;
+
+        case NN_AND_TWO_OPT:
         case GRASP_AND_TWO_OPT:
             {
-                printf("Running GRASP and 2-opt refinement with 20%% (%lf) time limit for GRASP and 80%% (%lf) for 2-opt refinement\n", inst->timelimit * 0.2, inst->timelimit * 0.8);
-                greedy_nn_heuristic(inst, inst->timelimit * 0.2, NONE);
+                double ratio = (strategy == GRASP_AND_TWO_OPT) ? 0.2 : 1.0;
+                greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
                 
-                temp_solution = initialize_identity_solution(inst->nnodes);
-                memcpy(temp_solution, inst->solution, sizeof(unsigned int) * inst->nnodes);
-                temp_solution_cost = inst->zbest;
-                curr_time = inst->tbest;
+                temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
                 
-                twoOpt_refinement(inst, inst->timelimit * 0.8, temp_solution, &temp_solution_cost, &curr_time);
+                twoOpt_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost, &curr_time);
                 
-                if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
-                    if (is_solution_valid(inst, temp_solution)) {
-                        inst->zbest = temp_solution_cost;
-                        inst->tbest = curr_time;
-                        memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
-                    } else {
-                        printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
-                    }
-                }
+                update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+                free(temp_solution);
+            }
+            break;
+
+        case NN_AND_VNS:
+        case GRASP_AND_VNS:
+            {
+                double ratio = (strategy == GRASP_AND_VNS) ? 0.2 : 1.0;
+                greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
+                
+                temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
+                
+                apply_vns_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost, &curr_time);
+                
+                update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+                free(temp_solution);
             }
             break;
 
         default:
-            {
-                printf("ERROR: Unknown solving strategy\n");
-            }
+            printf("ERROR: Unknown solving strategy\n");
             break;
     }
+    
     plot_solution(inst, inst->solution, 0, 1);
     return 0;
 }

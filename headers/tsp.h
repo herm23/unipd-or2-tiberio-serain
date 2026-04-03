@@ -7,10 +7,12 @@ enum TSP_SOLVING_STRATEGY {
     NN,
     NN_TWO_OPT_MULTISTART,
     NN_AND_TWO_OPT,
+    NN_VNS_MULTISTART,
     NN_AND_VNS,
     GRASP,
     GRASP_TWO_OPT_MULTISTART,
     GRASP_AND_TWO_OPT,
+    GRASP_VNS_MULTISTART,
     GRASP_AND_VNS
 };
 
@@ -120,6 +122,18 @@ double greedy_nn_heuristic_iteration(const instance *inst, unsigned int starting
  * @return short Returns 0 on success, non-zero if the time limit was exceeded.
  */
 short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
+
+/**
+ * @brief Applies the 3-opt kick by swapping 2 parts of the solution array
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param time_limit The maximum time allowed for the refinement.
+ * @param sol Pointer to the solution array to be refined.
+ * @param zbest Pointer to the variable storing the cost of the best solution found.
+ * @param tbest Pointer to the variable storing the time when the best solution was found.
+ * @return short Returns 0 on success, 1 if the time limit was exceeded.
+ */
+short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
 
 /**
  * @brief Performs a single iteration of the 2-opt refinement.
