@@ -29,6 +29,7 @@
  * @param pause Flag to pause after plotting.
  */
 void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause) {
+    if(inst->no_plot) return;
     /* ----------- Basic error checking ----------- */
     if (inst == NULL) {
         fprintf(stderr, "plot_tour error: inst is NULL\n");

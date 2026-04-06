@@ -174,8 +174,10 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     inst->zbest = -1;
     inst->model_type = 0;
     strcpy(inst->input_file, "NULL");
+    strcpy(inst->out_file, "NULL");
     inst->randomseed = -1;
     inst->timelimit = 1.0E+20;
+    inst->no_plot = 0;
 
     int help = 0;
     if (argc < 1) help = 1;
@@ -191,6 +193,26 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             continue;
         }
         //endregion INPUT FILE
+
+        //region OUTPUT FILE
+        if (
+            (strcmp(argv[i], "--out") == 0) ||
+            (strcmp(argv[i], "-out") == 0)
+        ) {
+            strcpy(inst->out_file, argv[++i]);
+            continue;
+        }
+        //endregion OUTPUT FILE
+
+        //region NO PLOT
+        if (
+            (strcmp(argv[i], "--no-plot") == 0) ||
+            (strcmp(argv[i], "-no-plot") == 0)
+        ) {
+            inst->no_plot = 1;
+            continue;
+        }
+        //endregion NO PLOT
 
         //region RANDOM INSTANCE
         if (strcmp(argv[i], "-seed") == 0) {

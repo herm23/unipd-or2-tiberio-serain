@@ -36,6 +36,8 @@ typedef struct {
     double tstart;
 
     unsigned int *solution; // best sol. available
+    int no_plot; // disable plotting
+    char out_file[1000]; // output file for solution
 
     FILE *plot;
 } instance;

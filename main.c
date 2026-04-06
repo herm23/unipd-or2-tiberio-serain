@@ -2,8 +2,9 @@
 #include "./headers/consts.h"
 #include "./headers/tsp.h"
 #include "./headers/chrono.h"
-#include <cplex.h>
 #include <string.h>
+#include <stdlib.h>
+#include <cplex.h>
 
 
 short TSP_OPT(instance *inst);
@@ -59,6 +60,23 @@ int main(int argc, char **argv) {
         printf("Program terminated in %lf sec.s\n", t2 - t1);
     }
 
+    if (strcmp(inst.out_file, "NULL") != 0) {
+        FILE *f = fopen(inst.out_file, "w");
+        if (f == NULL) {
+            perror("Error opening output file");
+        } else {
+            fprintf(f, "Instance: %s\n", inst.input_file);
+            fprintf(f, "Nodes: %d\n", inst.nnodes);
+            fprintf(f, "Best Cost (zbest): %lf\n", inst.zbest);
+            fprintf(f, "Best Time (tbest): %lf\n", inst.tbest);
+            fprintf(f, "Solution:\n");
+            for (int i = 0; i < inst.nnodes; i++) {
+                fprintf(f, "%u ", inst.solution[i]);
+            }
+            fprintf(f, "\n");
+            fclose(f);
+        }
+    }
 
     free_instance(&inst);
     return 0;
@@ -96,7 +114,7 @@ void apply_vns_refinement(instance *inst, double timelimit, unsigned int *sol, d
 /**
  * @brief Prepara una soluzione temporanea partendo da quella attuale dell'istanza.
  */
-unsigned int* prepare_temp_solution(instance *inst, double *cost, double *time) {
+unsigned int *prepare_temp_solution(instance *inst, double *cost, double *time) {
     unsigned int *temp = initialize_identity_solution(inst->nnodes);
     memcpy(temp, inst->solution, sizeof(unsigned int) * inst->nnodes);
     *cost = inst->zbest;
@@ -106,7 +124,7 @@ unsigned int* prepare_temp_solution(instance *inst, double *cost, double *time) 
 
 /**
  * @brief Optimizes the TSP instance using the chosen heuristic.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @return short Returns 0 on success.
  */
@@ -138,30 +156,26 @@ short TSP_OPT(instance *inst) {
 
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
-    switch (strategy)
-    {
-         case NN:
-         case NN_TWO_OPT_MULTISTART:
-         case NN_AND_TWO_OPT:
-            {
-                inst->GRASP_alpha = 0;
-                inst->VNS_kick_counter = 0;
-            }
-            break;
-        case NN_AND_VNS:
-            {
-                inst->GRASP_alpha = 0;
-                inst->VNS_kick_counter = 3;
-            }
-            break;
+    switch (strategy) {
+        case NN:
+        case NN_TWO_OPT_MULTISTART:
+        case NN_AND_TWO_OPT: {
+            inst->GRASP_alpha = 0;
+            inst->VNS_kick_counter = 0;
+        }
+        break;
+        case NN_AND_VNS: {
+            inst->GRASP_alpha = 0;
+            inst->VNS_kick_counter = 3;
+        }
+        break;
         case GRASP:
         case GRASP_TWO_OPT_MULTISTART:
-        case GRASP_AND_TWO_OPT:
-            {
-                inst->GRASP_alpha = 0.1;
-                inst->VNS_kick_counter = 0;
-            }
-            break;
+        case GRASP_AND_TWO_OPT: {
+            inst->GRASP_alpha = 0.1;
+            inst->VNS_kick_counter = 0;
+        }
+        break;
     }
 
     switch (strategy) {
@@ -181,40 +195,40 @@ short TSP_OPT(instance *inst) {
             break;
 
         case NN_AND_TWO_OPT:
-        case GRASP_AND_TWO_OPT:
-            {
-                double ratio = (strategy == GRASP_AND_TWO_OPT) ? 0.2 : 1.0;
-                greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
-                
-                temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
-                
-                twoOpt_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost, &curr_time);
-                
-                update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
-                free(temp_solution);
-            }
-            break;
+        case GRASP_AND_TWO_OPT: {
+            double ratio = (strategy == GRASP_AND_TWO_OPT) ? 0.2 : 1.0;
+            greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
+
+            temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
+
+            twoOpt_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost,
+                              &curr_time);
+
+            update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+            free(temp_solution);
+        }
+        break;
 
         case NN_AND_VNS:
-        case GRASP_AND_VNS:
-            {
-                double ratio = (strategy == GRASP_AND_VNS) ? 0.2 : 1.0;
-                greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
-                
-                temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
-                
-                apply_vns_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost, &curr_time);
-                
-                update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
-                free(temp_solution);
-            }
-            break;
+        case GRASP_AND_VNS: {
+            double ratio = (strategy == GRASP_AND_VNS) ? 0.2 : 1.0;
+            greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
+
+            temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
+
+            apply_vns_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost,
+                                 &curr_time);
+
+            update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+            free(temp_solution);
+        }
+        break;
 
         default:
             printf("ERROR: Unknown solving strategy\n");
             break;
     }
-    
+
     plot_solution(inst, inst->solution, 0, 1);
     return 0;
 }
