@@ -29,7 +29,7 @@
  * @param pause Flag to pause after plotting.
  */
 void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause) {
-    if(inst->no_plot) return;
+    if (inst->no_plot) return;
     /* ----------- Basic error checking ----------- */
     if (inst == NULL) {
         fprintf(stderr, "plot_tour error: inst is NULL\n");
@@ -133,7 +133,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
 
 /**
  * @brief Checks if a solution represents a valid tour (Hamiltonian cycle).
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param solution The solution array to be checked.
  * @return short Returns 1 if the tour is valid, 0 otherwise.
@@ -189,7 +189,7 @@ double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
 
 /**
  * @brief Calculates the index for an upper triangular distance matrix (without diagonal).
- * 
+ *
  * @param i Index of the first node.
  * @param j Index of the second node.
  * @param N Total number of nodes.
@@ -201,7 +201,7 @@ unsigned int index_upper(unsigned int i, unsigned int j, unsigned int N) {
 
 /**
  * @brief Sets the precalculated distance between two nodes in the distance matrix.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param i Index of the first node.
  * @param j Index of the second node.
@@ -226,7 +226,7 @@ short set_precalculated_distance(const instance *inst, unsigned int i, unsigned 
 
 /**
  * @brief Retrieves the precalculated distance between two nodes from the distance matrix.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param i Index of the first node.
  * @param j Index of the second node.
@@ -252,10 +252,10 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
 
 /**
  * @brief Executes the Nearest Neighbor (NN) heuristic to solve the TSP.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the heuristic to run.
- 
+
  * @param refinement The refinement strategy to be applied after each iteration.
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
@@ -269,41 +269,58 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
 
     for (int i = 0; i < inst->nnodes; i++) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
-        double temp_solution_cost = greedy_nn_heuristic_iteration(inst, nodes_order[i], inst->GRASP_alpha, temp_solution);
+        double temp_solution_cost = greedy_nn_heuristic_iteration(inst, nodes_order[i], inst->GRASP_alpha,
+                                                                  temp_solution);
 
         double curr_time = second() - inst->tstart;
         printf("\t -> S-node %7d,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost,
                curr_time);
 
-        switch (refinement)
-        {
+        switch (refinement) {
             case TWO_OPT:
-            case VNS:
-                {
-                    //NOTE: Performing vns kicks
-                    for(int i = 0; i < inst->VNS_kick_counter; i++)
-                    {
-                        //2-opt    
-                        printf("\n");
-                        twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                        printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
-                            temp_solution_cost,
-                            curr_time);
+            case VNS: {
+                //NOTE: Performing vns kicks
+                int kick = 0;
+                do {
+                    //2-opt
+                    printf("\n");
+                    twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                    printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
+                           temp_solution_cost,
+                           curr_time);
 
-                        //VNS-kick
-                        if(refinement == VNS)
-                        {
-                            vns_kick(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                            printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
-                            temp_solution_cost,
-                            curr_time);
-                        }
+                    if (refinement == VNS && kick < inst->VNS_kick_counter) {
+                        vns_kick(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
+                               temp_solution_cost,
+                               curr_time);
                     }
+                    kick++;
+                } while (kick < inst->VNS_kick_counter);
+                // for(int i = 0; i < inst->VNS_kick_counter; i++)
+                // {
+                //     //2-opt
+                //     printf("\n");
+                //     twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                //     printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
+                //         temp_solution_cost,
+                //         curr_time);
+                //
+                //     //VNS-kick
+                //     if(refinement == VNS)
+                //     {
+                //         vns_kick(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                //         printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
+                //         temp_solution_cost,
+                //         curr_time);
+                //     }
+                // }
+            }
+            break;
 
-                }
-                break;
-
-            case NONE: {} break; //Nothing to do here
+            case NONE: {
+            }
+            break; //Nothing to do here
         }
 
         if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
@@ -339,7 +356,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
 
 /**
  * @brief Performs a single iteration of the Nearest Neighbor heuristic starting from a specific node.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param startingNode The index of the node to start the tour from. If -1, a random node is chosen.
  * @param GRASP_alpha The alpha parameter for the GRASP heuristic (0 = greedy, 1 = random).
@@ -388,7 +405,7 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
 
 /**
  * @brief Applies the 2-opt refinement strategy to an existing TSP solution.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the refinement.
  * @param sol Pointer to the solution array to be refined.
@@ -433,76 +450,10 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
     return exitStatus;
 }
 
-/**
- * @brief Applies the 3-opt kick by swapping 2 parts of the solution array
- * 
- * @param inst Pointer to the instance structure.
- * @param time_limit The maximum time allowed for the refinement.
- * @param sol Pointer to the solution array to be refined.
- * @param zbest Pointer to the variable storing the cost of the best solution found.
- * @param tbest Pointer to the variable storing the time when the best solution was found.
- * @return short Returns 0 on success, 1 if the time limit was exceeded.
- */
-short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
-    double curr_time = second() - inst->tstart;
-    short exitStatus = 0;
-
-    //NOTE: Generating random pointers
-    int p1 = -1;
-    int p2 = -1;
-
-    //NOTE: I'd like p1 p2 further one from another
-    while (!(p1 != p2 && abs(p1 - p2) > (inst->nnodes * 0.25)))
-    {
-        p1 = (int)(rand_0_1() * inst->nnodes);
-        p2 = (int)(rand_0_1() * inst->nnodes);
-    }
-
-    int min = p1 < p2 ? p1 : p2;
-    int max = p1 > p2 ? p1 : p2;
-
-    //NOTE: Tmp array
-    unsigned int *temp_solution = malloc(inst->nnodes * sizeof(unsigned int));
-    int tmp_index = 0;
-
-    //NOTE: Copying the first part
-    for(int i = 0; i < min; i++) temp_solution[tmp_index++] = sol[i];
-
-    //NOTE: Copying the second part
-    for(int i = max; i < inst->nnodes; i++) temp_solution[tmp_index++] = sol[i];
-
-    //NOTE: Copying the last part
-    for(int i = min; i < max; i++) temp_solution[tmp_index++] = sol[i];
-
-    //NOTE: Adjusting costs and time
-    int last_index = inst->nnodes - 1;
-    int prev_min = min > 0 ? (min - 1) : last_index;
-    int prev_max = max > 0 ? (max - 1) : last_index;
-
-    *zbest -= get_precalculated_distance(inst, sol[prev_min], sol[min]);
-    *zbest -= get_precalculated_distance(inst, sol[prev_max], sol[max]);
-    *zbest -= get_precalculated_distance(inst, sol[last_index], sol[0]);
-
-    *zbest += get_precalculated_distance(inst, temp_solution[prev_min], temp_solution[min]);
-    *zbest += get_precalculated_distance(inst, temp_solution[prev_max], temp_solution[max]);
-    *zbest += get_precalculated_distance(inst, temp_solution[last_index], sol[0]);
-
-    *tbest = curr_time;
-
-    memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
-    free(temp_solution);
-
-    if (time_limit != 0 && curr_time > time_limit)
-    {
-        exitStatus = 1;
-    }
-
-    return exitStatus;
-}
 
 /**
  * @brief Performs a single iteration of the 2-opt refinement (best improvement).
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param sol Pointer to the solution array to be refined.
  * @return double The improvement (reduction in cost) achieved by the iteration.
@@ -545,4 +496,70 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
     }
 
     return minDeltaCost;
+}
+
+
+/**
+ * @brief Applies the 3-opt kick by swapping 2 parts of the solution array
+ *
+ * @param inst Pointer to the instance structure.
+ * @param time_limit The maximum time allowed for the refinement.
+ * @param sol Pointer to the solution array to be refined.
+ * @param zbest Pointer to the variable storing the cost of the best solution found.
+ * @param tbest Pointer to the variable storing the time when the best solution was found.
+ * @return short Returns 0 on success, 1 if the time limit was exceeded.
+ */
+short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
+    double curr_time = second() - inst->tstart;
+    short exitStatus = 0;
+
+    //NOTE: Generating random pointers
+    int p1 = -1;
+    int p2 = -1;
+
+    //NOTE: I'd like p1 p2 further one from another
+    while (!(p1 != p2 && abs(p1 - p2) > (inst->nnodes * 0.25))) {
+        p1 = (int) (rand_0_1() * inst->nnodes);
+        p2 = (int) (rand_0_1() * inst->nnodes);
+    }
+
+    int min = p1 < p2 ? p1 : p2;
+    int max = p1 > p2 ? p1 : p2;
+
+    //NOTE: Tmp array
+    unsigned int *temp_solution = malloc(inst->nnodes * sizeof(unsigned int));
+    int tmp_index = 0;
+
+    //NOTE: Copying the first part
+    for (int i = 0; i < min; i++) temp_solution[tmp_index++] = sol[i];
+
+    //NOTE: Copying the second part
+    for (int i = max; i < inst->nnodes; i++) temp_solution[tmp_index++] = sol[i];
+
+    //NOTE: Copying the last part
+    for (int i = min; i < max; i++) temp_solution[tmp_index++] = sol[i];
+
+    //NOTE: Adjusting costs and time
+    int last_index = inst->nnodes - 1;
+    int prev_min = min > 0 ? (min - 1) : last_index;
+    int prev_max = max > 0 ? (max - 1) : last_index;
+
+    *zbest -= get_precalculated_distance(inst, sol[prev_min], sol[min]);
+    *zbest -= get_precalculated_distance(inst, sol[prev_max], sol[max]);
+    *zbest -= get_precalculated_distance(inst, sol[last_index], sol[0]);
+
+    *zbest += get_precalculated_distance(inst, temp_solution[prev_min], temp_solution[min]);
+    *zbest += get_precalculated_distance(inst, temp_solution[prev_max], temp_solution[max]);
+    *zbest += get_precalculated_distance(inst, temp_solution[last_index], sol[0]);
+
+    *tbest = curr_time;
+
+    memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
+    free(temp_solution);
+
+    if (time_limit != 0 && curr_time > time_limit) {
+        exitStatus = 1;
+    }
+
+    return exitStatus;
 }
