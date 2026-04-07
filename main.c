@@ -152,7 +152,7 @@ short TSP_OPT(instance *inst) {
     double curr_time;
 
     // enum TSP_SOLVING_STRATEGY strategy = GRASP_TWO_OPT_MULTISTART;
-    enum TSP_SOLVING_STRATEGY strategy = NN_AND_VNS;
+    enum TSP_SOLVING_STRATEGY strategy = NN;
 
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
