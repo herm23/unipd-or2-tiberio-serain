@@ -152,18 +152,12 @@ short TSP_OPT(instance *inst) {
     double curr_time;
 
     // enum TSP_SOLVING_STRATEGY strategy = GRASP_TWO_OPT_MULTISTART;
-    enum TSP_SOLVING_STRATEGY strategy = NN;
+    enum TSP_SOLVING_STRATEGY strategy = NN_VNS_MULTISTART;
 
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
     switch (strategy) {
-        case NN:
-        case NN_TWO_OPT_MULTISTART:
-        case NN_AND_TWO_OPT: {
-            inst->GRASP_alpha = 0;
-            inst->VNS_kick_counter = 0;
-        }
-        break;
+        case NN_VNS_MULTISTART:
         case NN_AND_VNS: {
             inst->GRASP_alpha = 0;
             inst->VNS_kick_counter = 3;
@@ -176,6 +170,15 @@ short TSP_OPT(instance *inst) {
             inst->VNS_kick_counter = 0;
         }
         break;
+        case GRASP_VNS_MULTISTART:
+        case GRASP_AND_VNS: {
+            inst->GRASP_alpha = 0.1;
+            inst->VNS_kick_counter = 3;
+        }
+        break;
+        default:
+            inst->GRASP_alpha = 0;
+            inst->VNS_kick_counter = 0;
     }
 
     switch (strategy) {
