@@ -13,7 +13,8 @@ enum TSP_SOLVING_STRATEGY {
     GRASP_TWO_OPT_MULTISTART,
     GRASP_AND_TWO_OPT,
     GRASP_VNS_MULTISTART,
-    GRASP_AND_VNS
+    GRASP_AND_VNS,
+    EXTRA_MILEAGE
 };
 
 enum TSP_REFINEMENT_STRATEGY {
@@ -43,6 +44,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
  * @param solution The solution array to be checked.
  * @return short Returns 0 if the tour is valid, non-zero otherwise.
  */
+void update_instance_solution(instance *inst, unsigned int *new_sol, double new_cost, double new_time);
 short is_solution_valid(const instance *inst, const unsigned int *solution);
 
 /**
@@ -92,6 +94,7 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
  * @return short Returns 0 on success, non-zero if the time limit was exceeded.
  */
 short greedy_nn_heuristic(instance *inst, double time_limit, enum TSP_REFINEMENT_STRATEGY refinement);
+short extra_mileage_heuristic(instance *inst, double time_limit);
 
 /**
  * @brief Performs a single iteration of the Nearest Neighbor heuristic starting from a specific node.

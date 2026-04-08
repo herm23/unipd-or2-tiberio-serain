@@ -81,6 +81,7 @@ The solver implements several strategies based on construction heuristics and re
 | `7` | `GRASP_AND_TWO_OPT` | GRASP followed by a single 2-opt refinement. |
 | `8` | `GRASP_VNS_MULTISTART` | GRASP with VNS refinement at each iteration. |
 | `9` | `GRASP_AND_VNS` | GRASP followed by VNS refinement. |
+| `10` | `EXTRA_MILEAGE` | Extra Mileage (Cheapest Insertion) construction heuristic. |
 
 ## Project Structure
 

@@ -259,6 +259,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
         printf("-file %s\n", inst->input_file);
         printf("-time_limit %lf\n", inst->timelimit);
         printf("-model_type %d\n", inst->model_type);
+        printf("  0: NN, 1: NN_2OPT_MS, 2: NN_2OPT, 3: NN_VNS_MS, 4: NN_VNS, 5: GRASP, 6: GRASP_2OPT_MS, 7: GRASP_2OPT, 8: GRASP_VNS_MS, 9: GRASP_VNS, 10: EXTRA_MILEAGE\n");
         printf("-seed %d\n", inst->randomseed);
         printf("-verbosity %d\n", inst->verbosity);
         printf("\nenter -help or --help for help\n");

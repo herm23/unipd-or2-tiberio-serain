@@ -359,9 +359,80 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
     }
 
     free(nodes_order);
+    return exitStatus;
+}
 
-    return
-            exitStatus;
+/**
+ * @brief Executes the Extra Mileage heuristic to solve the TSP.
+ * 
+ * @param inst Pointer to the instance structure.
+ * @param time_limit The maximum time allowed for the heuristic to run.
+ * @return short Returns 0 on success, 1 if the time limit was exceeded.
+ */
+short extra_mileage_heuristic(instance *inst, double time_limit) {
+    if (inst->verbosity >= DEBUG) printf("\t## START extra_mileage_heuristic\n");
+
+    const int N = inst->nnodes;
+    unsigned int *sol = malloc(N * sizeof(unsigned int));
+    unsigned char *visited = calloc(N, sizeof(unsigned char));
+
+    // 1. Initial sub-tour: start with two nodes (0 and 1 for simplicity)
+    // A better choice could be the two farthest nodes
+    sol[0] = 0;
+    sol[1] = 1;
+    visited[0] = 1;
+    visited[1] = 1;
+
+    int current_nodes_in_tour = 2;
+
+    while (current_nodes_in_tour < N) {
+        double min_extra_mileage = -1.0;
+        unsigned int best_node = -1;
+        int best_pos = -1;
+
+        for (int k = 0; k < N; k++) {
+            if (visited[k]) continue;
+
+            for (int i = 0; i < current_nodes_in_tour; i++) {
+                int j = (i + 1) % current_nodes_in_tour;
+                
+                double d_ik = get_precalculated_distance(inst, sol[i], k);
+                double d_kj = get_precalculated_distance(inst, k, sol[j]);
+                double d_ij = get_precalculated_distance(inst, sol[i], sol[j]);
+
+                double delta = d_ik + d_kj - d_ij;
+
+                if (min_extra_mileage < 0 || delta < min_extra_mileage - EPSILON) {
+                    min_extra_mileage = delta;
+                    best_node = k;
+                    best_pos = i + 1;
+                }
+            }
+        }
+
+        // Insert best_node at best_pos
+        for (int i = current_nodes_in_tour; i > best_pos; i--) {
+            sol[i] = sol[i - 1];
+        }
+        sol[best_pos] = best_node;
+        visited[best_node] = 1;
+        current_nodes_in_tour++;
+
+        double curr_time = second() - inst->tstart;
+        if (curr_time > time_limit) {
+            free(sol);
+            free(visited);
+            return 1;
+        }
+    }
+
+    double final_cost = calculate_solution_cost(inst, sol);
+    double final_time = second() - inst->tstart;
+    update_instance_solution(inst, sol, final_cost, final_time);
+
+    free(sol);
+    free(visited);
+    return 0;
 }
 
 /**

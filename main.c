@@ -82,9 +82,6 @@ int main(int argc, char **argv) {
 }
 
 
-/**
- * @brief Tenta di aggiornare la soluzione migliore dell'istanza con una nuova proposta.
- */
 void update_instance_solution(instance *inst, unsigned int *new_sol, double new_cost, double new_time) {
     if (inst->zbest < 0 || new_cost < inst->zbest - EPSILON) {
         if (is_solution_valid(inst, new_sol)) {
@@ -150,8 +147,7 @@ short TSP_OPT(instance *inst) {
     double temp_solution_cost;
     double curr_time;
 
-    // enum TSP_SOLVING_STRATEGY strategy = GRASP_TWO_OPT_MULTISTART;
-    enum TSP_SOLVING_STRATEGY strategy = NN_VNS_MULTISTART;
+    enum TSP_SOLVING_STRATEGY strategy = inst->model_type;
 
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
@@ -225,6 +221,10 @@ short TSP_OPT(instance *inst) {
             free(temp_solution);
         }
         break;
+
+        case EXTRA_MILEAGE:
+            extra_mileage_heuristic(inst, inst->timelimit);
+            break;
 
         default:
             if (inst->verbosity >= SILENT) printf("ERROR: Unknown solving strategy\n");
