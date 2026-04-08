@@ -295,6 +295,11 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                                curr_time);
                     }
 
+                    if (curr_time > time_limit) {
+                        exitStatus = 1;
+                        break;
+                    }
+
                     if (refinement == VNS && kick < inst->VNS_kick_counter) {
                         vns_kick(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
                         if (inst->verbosity >= DEBUG) {
@@ -302,6 +307,11 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                                    temp_solution_cost,
                                    curr_time);
                         }
+                    }
+
+                    if (curr_time > time_limit) {
+                        exitStatus = 1;
+                        break;
                     }
                     kick++;
                 } while (kick < inst->VNS_kick_counter);
@@ -340,7 +350,8 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                     printf("\nNew incumbent: cost = %.2lf, time = %.2lf\n", inst->zbest, inst->tbest);
                 }
             } else {
-                if (inst->verbosity >= SILENT) printf("\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+                if (inst->verbosity >= SILENT) printf(
+                    "\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
             }
         }
         if (inst->verbosity >= DEBUG) printf("\n\n");
@@ -395,7 +406,7 @@ short extra_mileage_heuristic(instance *inst, double time_limit) {
 
             for (int i = 0; i < current_nodes_in_tour; i++) {
                 int j = (i + 1) % current_nodes_in_tour;
-                
+
                 double d_ik = get_precalculated_distance(inst, sol[i], k);
                 double d_kj = get_precalculated_distance(inst, k, sol[j]);
                 double d_ij = get_precalculated_distance(inst, sol[i], sol[j]);
@@ -508,7 +519,8 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         initial_cost += temp_solution_cost_delta;
 
         double curr_time = second() - inst->tstart;
-        if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost, curr_time);
+        if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
+                                             curr_time);
         if (temp_solution_cost_delta > -EPSILON)
             return 0;
 
