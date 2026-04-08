@@ -168,8 +168,6 @@ void free_instance(instance *inst) {
  * @param inst Pointer to the instance structure to be populated.
  */
 void parse_command_line(int argc, char **argv, instance *inst) {
-    if (VERBOSE >= 100) printf(" running %s with %d parameters \n", argv[0], argc - 1);
-
     // default
     inst->zbest = -1;
     inst->model_type = 0;
@@ -178,11 +176,21 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     inst->randomseed = -1;
     inst->timelimit = 1.0E+20;
     inst->no_plot = 0;
+    inst->verbosity = DEFAULT_VERBOSITY;
 
     int help = 0;
     if (argc < 1) help = 1;
     //@COMPLEX@: Command line parser uses a simple loop to match flags and store values in the instance structure.
     for (int i = 1; i < argc; i++) {
+        //region VERBOSITY
+        if (
+            (strcmp(argv[i], "-verbosity") == 0) ||
+            (strcmp(argv[i], "-v") == 0)
+        ) {
+            inst->verbosity = atoi(argv[++i]);
+            continue;
+        }
+        //endregion VERBOSITY
         //region INPUT FILE
         if (
             (strcmp(argv[i], "-file") == 0) ||
@@ -243,13 +251,16 @@ void parse_command_line(int argc, char **argv, instance *inst) {
         //help = 1;
     }
 
-    if (help || (VERBOSE >= 10)) // print current parameters
+    if (inst->verbosity >= DEBUG) printf(" running %s with %d parameters \n", argv[0], argc - 1);
+
+    if (help || (inst->verbosity >= INFO)) // print current parameters
     {
         printf("\n\navailable parameters (vers. 16-may-2015) --------------------------------------------------\n");
         printf("-file %s\n", inst->input_file);
         printf("-time_limit %lf\n", inst->timelimit);
         printf("-model_type %d\n", inst->model_type);
         printf("-seed %d\n", inst->randomseed);
+        printf("-verbosity %d\n", inst->verbosity);
         printf("\nenter -help or --help for help\n");
         printf("----------------------------------------------------------------------------------------------\n\n");
     }
@@ -323,17 +334,17 @@ void parse_tsp_file(instance *inst) {
 
     int active_section = 0; // =1 NODE_COORD_SECTION, =0 INFO
 
-    int do_print = (VERBOSE >= 1000);
+    int do_print = (inst->verbosity >= VERBOSE_LEVEL);
 
     //@COMPLEX@: The input reader is a simple TSPLIB parser that handles limited keywords and coordinates.
     while (fgets(line, sizeof(line), fin) != NULL) {
-        if (VERBOSE >= 2000) {
+        if (inst->verbosity >= TRACE) {
             printf("%s", line);
             fflush(NULL);
         }
         if (strlen(line) <= 1) continue; // skip empty lines
         par_name = strtok(line, " :");
-        if (VERBOSE >= 3000) {
+        if (inst->verbosity >= TRACE) {
             printf("parameter \"%s\" ", par_name);
             fflush(NULL);
         }
@@ -346,7 +357,7 @@ void parse_tsp_file(instance *inst) {
         if (strncmp(par_name, "COMMENT", 7) == 0) {
             active_section = 0;
             token1 = strtok(NULL, "");
-            if (VERBOSE >= 10) printf(" ... solving instance %s with model %d\n\n", token1, inst->model_type);
+            if (inst->verbosity >= INFO) printf(" ... solving instance %s with model %d\n\n", token1, inst->model_type);
             continue;
         }
 
@@ -410,7 +421,7 @@ void parse_tsp_file(instance *inst) {
             continue;
         }
 
-        printf(" final active section %d\n", active_section);
+        if (inst->verbosity >= TRACE) printf(" final active section %d\n", active_section);
         print_error_and_die(" ... wrong format for the current simplified parser!!!!!!!!!");
     }
 
@@ -449,7 +460,7 @@ void generate_random_instance(instance *inst) {
         inst->ycoord[i] = ((double) rand() / (double) RAND_MAX) * YMAX;
     }
 
-    if (VERBOSE >= 10) {
+    if (inst->verbosity >= INFO) {
         printf(" ... generated random instance with %d nodes and seed %u\n", inst->nnodes, inst->randomseed);
     }
     inst->plot = NULL;

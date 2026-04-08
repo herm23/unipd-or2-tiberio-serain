@@ -31,24 +31,26 @@
 void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause) {
     if (inst->no_plot) return;
     /* ----------- Basic error checking ----------- */
-    if (inst == NULL) {
-        fprintf(stderr, "plot_tour error: inst is NULL\n");
-        return;
-    }
+    if (inst->verbosity >= SILENT) {
+        if (inst == NULL) {
+            fprintf(stderr, "plot_tour error: inst is NULL\n");
+            return;
+        }
 
-    if (inst->nnodes <= 0) {
-        fprintf(stderr, "plot_tour error: invalid number of nodes\n");
-        return;
-    }
+        if (inst->nnodes <= 0) {
+            fprintf(stderr, "plot_tour error: invalid number of nodes\n");
+            return;
+        }
 
-    if (inst->xcoord == NULL || inst->ycoord == NULL) {
-        fprintf(stderr, "plot_tour error: coordinate arrays are NULL\n");
-        return;
-    }
+        if (inst->xcoord == NULL || inst->ycoord == NULL) {
+            fprintf(stderr, "plot_tour error: coordinate arrays are NULL\n");
+            return;
+        }
 
-    if (!only_instance && solution == NULL) {
-        fprintf(stderr, "plot_tour error: solution is NULL\n");
-        return;
+        if (!only_instance && solution == NULL) {
+            fprintf(stderr, "plot_tour error: solution is NULL\n");
+            return;
+        }
     }
 
     /* ----------- Open gnuplot pipe ----------- */
@@ -92,7 +94,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
             int idx = solution[i];
 
             if (idx < 0 || idx >= inst->nnodes) {
-                fprintf(stderr, "plot_tour error: invalid index in solution\n");
+                if (inst->verbosity >= SILENT) fprintf(stderr, "plot_tour error: invalid index in solution\n");
                 pclose(inst->plot);
                 return;
             }
@@ -124,7 +126,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
     fflush(inst->plot);
 
     if (pause && inst->plot != NULL) {
-        printf("\nPress ENTER to close the graph and resume the program...");
+        if (inst->verbosity >= ESSENTIAL) printf("\nPress ENTER to close the graph and resume the program...");
         getchar();
     }
 }
@@ -260,7 +262,7 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
 short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFINEMENT_STRATEGY refinement) {
-    printf("\t## START greedy_nn_heuristic\n");
+    if (inst->verbosity >= DEBUG) printf("\t## START greedy_nn_heuristic\n");
 
     short exitStatus = 0;
 
@@ -273,8 +275,10 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                                                                   temp_solution);
 
         double curr_time = second() - inst->tstart;
-        printf("\t -> S-node %7d,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost,
-               curr_time);
+        if (inst->verbosity >= DEBUG) {
+            printf("\t -> S-node %7d,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost,
+                   curr_time);
+        }
 
         switch (refinement) {
             case TWO_OPT:
@@ -283,17 +287,21 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                 int kick = 0;
                 do {
                     //2-opt
-                    printf("\n");
+                    if (inst->verbosity >= DEBUG) printf("\n");
                     twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                    printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
-                           temp_solution_cost,
-                           curr_time);
+                    if (inst->verbosity >= DEBUG) {
+                        printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
+                               temp_solution_cost,
+                               curr_time);
+                    }
 
                     if (refinement == VNS && kick < inst->VNS_kick_counter) {
                         vns_kick(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
-                               temp_solution_cost,
-                               curr_time);
+                        if (inst->verbosity >= DEBUG) {
+                            printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
+                                   temp_solution_cost,
+                                   curr_time);
+                        }
                     }
                     kick++;
                 } while (kick < inst->VNS_kick_counter);
@@ -323,17 +331,19 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
             break; //Nothing to do here
         }
 
-        if (inst->zbest < 0 || temp_solution_cost < inst->zbest) {
+        if (inst->zbest < 0 || temp_solution_cost < inst->zbest - EPSILON) {
             if (is_solution_valid(inst, temp_solution)) {
                 inst->zbest = temp_solution_cost;
                 inst->tbest = curr_time;
                 memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
-                printf(" (INCUMBENT)");
+                if (inst->verbosity >= INFO) {
+                    printf("\nNew incumbent: cost = %.2lf, time = %.2lf\n", inst->zbest, inst->tbest);
+                }
             } else {
-                printf("\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+                if (inst->verbosity >= SILENT) printf("\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
             }
         }
-        printf("\n\n");
+        if (inst->verbosity >= DEBUG) printf("\n\n");
         free(temp_solution);
 
         if (curr_time > time_limit) {
@@ -387,7 +397,7 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
             //GRASP HERE!
             tmpDist *= 1 + GRASP_alpha * rand_0_1();
 
-            if (minDist == -1 || tmpDist < minDist) {
+            if (minDist < 0 || tmpDist < minDist - EPSILON) {
                 minDist = tmpDist;
                 pointIndex = j;
             }
@@ -414,7 +424,7 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
 short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
-    printf("\t\t## STARTING twoOpt_refinement\n");
+    if (inst->verbosity >= DEBUG) printf("\t\t## STARTING twoOpt_refinement\n");
 
     short exitStatus = 0;
 
@@ -427,8 +437,8 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         initial_cost += temp_solution_cost_delta;
 
         double curr_time = second() - inst->tstart;
-        printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost, curr_time);
-        if (temp_solution_cost_delta == 0)
+        if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost, curr_time);
+        if (temp_solution_cost_delta > -EPSILON)
             return 0;
 
         *zbest += temp_solution_cost_delta;
@@ -481,7 +491,7 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
 
             double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
 
-            if (deltaCost < minDeltaCost) {
+            if (deltaCost < minDeltaCost - EPSILON) {
                 minDeltaCost = deltaCost;
                 a = i;
                 b = j;
@@ -489,7 +499,7 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
         }
     }
 
-    if (minDeltaCost != 0) {
+    if (minDeltaCost < -EPSILON) {
         //MOVE
         swap(&sol[a + 1], &sol[b], sizeof(int));
         reverse_subarray_circular(sol, nodes, a + 2, b);

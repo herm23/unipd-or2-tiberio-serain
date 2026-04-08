@@ -4,6 +4,7 @@
 #define UTILS_H
 #include <stddef.h>
 #include <stdio.h>
+#include "consts.h"
 
 #ifdef _WIN32
 #define popen _popen
@@ -40,6 +41,7 @@ typedef struct {
 
     unsigned int *solution; // best sol. available
     int no_plot; // disable plotting
+    int verbosity; // verbosity level
     char out_file[1000]; // output file for solution
 
     FILE *plot;

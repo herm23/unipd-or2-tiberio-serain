@@ -17,20 +17,19 @@ short TSP_OPT(instance *inst);
  * @return int Returns 0 on success, 1 on error.
  */
 int main(int argc, char **argv) {
+    instance inst;
+    parse_command_line(argc, argv, &inst);
+
     if (argc < 2) {
-        printf("Usage: %s -help for help\n", argv[0]);
+        if (inst.verbosity >= ESSENTIAL) printf("Usage: %s -help for help\n", argv[0]);
         exit(1);
     }
-    if (VERBOSE >= 2) {
+    if (inst.verbosity >= INFO) {
         for (int a = 0; a < argc; a++) printf("%s ", argv[a]);
         printf("\n");
     }
 
-    instance inst;
-
-
     const double t1 = second();
-    parse_command_line(argc, argv, &inst);
     read_input(&inst);
     init_distances(&inst);
 
@@ -44,10 +43,10 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    printf("## COST %15lf AT TIME %lf\n", inst.zbest, inst.tbest);
+    if (inst.verbosity >= ESSENTIAL) printf("\n## COST %15lf AT TIME %lf\n", inst.zbest, inst.tbest);
 
 
-    if (VERBOSE >= 1000) {
+    if (inst.verbosity >= VERBOSE_LEVEL) {
         printf("FINAL SOLUTION:\n");
         for (unsigned int i = 0; i < inst.nnodes; ++i) {
             printf("%d --> %d\n", i, inst.solution[i]);
@@ -56,7 +55,7 @@ int main(int argc, char **argv) {
 
     const double t2 = second();
 
-    if (VERBOSE >= 1) {
+    if (inst.verbosity >= ESSENTIAL) {
         printf("Program terminated in %lf sec.s\n", t2 - t1);
     }
 
@@ -87,13 +86,13 @@ int main(int argc, char **argv) {
  * @brief Tenta di aggiornare la soluzione migliore dell'istanza con una nuova proposta.
  */
 void update_instance_solution(instance *inst, unsigned int *new_sol, double new_cost, double new_time) {
-    if (inst->zbest < 0 || new_cost < inst->zbest) {
+    if (inst->zbest < 0 || new_cost < inst->zbest - EPSILON) {
         if (is_solution_valid(inst, new_sol)) {
             inst->zbest = new_cost;
             inst->tbest = new_time;
             memcpy(inst->solution, new_sol, sizeof(unsigned int) * inst->nnodes);
         } else {
-            printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
+            if (inst->verbosity >= SILENT) printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
         }
     }
 }
@@ -145,7 +144,7 @@ short TSP_OPT(instance *inst) {
     inst->zbest = solution_cost;
     inst->zstart = solution_cost;
 
-    printf("\n\n## FINAL OPTIMAL / INCUMBEMT SOLUTION WITH COST %15lf FOUND AT TIME 0\n", solution_cost);
+    if (inst->verbosity >= ESSENTIAL) printf("\n\n## STARTING SOLUTION HAS COST %15lf\n", solution_cost);
 
     unsigned int *temp_solution = NULL;
     double temp_solution_cost;
@@ -228,7 +227,7 @@ short TSP_OPT(instance *inst) {
         break;
 
         default:
-            printf("ERROR: Unknown solving strategy\n");
+            if (inst->verbosity >= SILENT) printf("ERROR: Unknown solving strategy\n");
             break;
     }
 

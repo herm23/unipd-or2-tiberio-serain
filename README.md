@@ -54,7 +54,17 @@ The executable accepts several command-line arguments to control the optimizatio
 | `-model_type` / `-model` | Type of heuristic/strategy to use (see table below) | `0` |
 | `-seed` | Random seed for stochastic components | `-1` |
 | `-no-plot` / `--no-plot` | Disable GNUplot visualization | (False) |
+| `-verbosity` / `-v` | Verbosity level (0 to 5) | `2` (INFO) |
 | `-help` / `--help` | Show available parameters | - |
+
+### Verbosity Levels
+The program uses various verbosity levels to control the amount of information printed to the console:
+- `0`: SILENT - No output except errors.
+- `1`: ESSENTIAL - Basic solving information (e.g., total time, best cost).
+- `2`: INFO - Echoes command line arguments, parameters and instance summary.
+- `3`: DEBUG - Solver progress and important intermediate results.
+- `4`: VERBOSE - Detailed parser information and input reading.
+- `5`: TRACE - Low-level tracing (raw input lines, tokenized parameters).
 
 ### Solving Strategies (`-model_type`)
 The solver implements several strategies based on construction heuristics and refinement techniques.

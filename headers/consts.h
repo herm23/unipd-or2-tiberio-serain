@@ -2,17 +2,23 @@
 #define CONSTS_H
 
 /**
- * Verbosity levels (VERBOSE):
- * - >= 1: Basic solving information (e.g., total time).
- * - >= 2: Echoes command line arguments.
- * - >= 10: Prints current parameters and instance details.
- * - >= 100: Displays parser startup information.
- * - >= 1000: Shows detailed input reading and final solution tour.
- * - >= 2000: Prints raw input lines during parsing.
- * - >= 3000: Displays tokenized parameter names during parsing.
+ * Verbosity levels:
+ * - 0: SILENT    - No output except errors.
+ * - 1: ESSENTIAL - Basic solving information (e.g., total time, best cost).
+ * - 2: INFO      - Echoes command line arguments, parameters and instance summary.
+ * - 3: DEBUG     - Solver progress and important intermediate results.
+ * - 4: VERBOSE   - Detailed parser information and input reading.
+ * - 5: TRACE     - Low-level tracing (raw input lines, tokenized parameters).
  */
 
-#define VERBOSE  10 
+#define SILENT          0
+#define ESSENTIAL       1
+#define INFO            2
+#define DEBUG           3
+#define VERBOSE_LEVEL   4
+#define TRACE           5
+
+#define DEFAULT_VERBOSITY INFO
 
 // hard-wired parameters
 #define XSMALL                1e-5      
