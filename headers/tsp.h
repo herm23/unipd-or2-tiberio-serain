@@ -9,6 +9,7 @@ enum TSP_SOLVING_STRATEGY {
     NN_AND_TWO_OPT,
     NN_VNS_MULTISTART,
     NN_AND_VNS,
+    NN_AND_TABU_SEARCH,
     GRASP,
     GRASP_TWO_OPT_MULTISTART,
     GRASP_AND_TWO_OPT,
@@ -20,7 +21,8 @@ enum TSP_SOLVING_STRATEGY {
 enum TSP_REFINEMENT_STRATEGY {
     NONE,
     TWO_OPT,
-    VNS
+    VNS,
+    TABU_SEARCH //TODO: Implement the tabu search
 };
 
 

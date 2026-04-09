@@ -413,6 +413,7 @@ short extra_mileage_heuristic(instance *inst, double time_limit) {
 
                 double delta = d_ik + d_kj - d_ij;
 
+                //NOTE: Here we are looking for the minimun delta and the related node
                 if (min_extra_mileage < 0 || delta < min_extra_mileage - EPSILON) {
                     min_extra_mileage = delta;
                     best_node = k;
@@ -421,7 +422,9 @@ short extra_mileage_heuristic(instance *inst, double time_limit) {
             }
         }
 
-        // Insert best_node at best_pos
+        // Insert best_node at best_pos (shifting all nodes in the sol array)
+        //NOTE: This is a forward shift to create space into the array to add the best node
+        //NOTE: The last iteration moves the node into the "best_pos", so it creates the wanted space
         for (int i = current_nodes_in_tour; i > best_pos; i--) {
             sol[i] = sol[i - 1];
         }
