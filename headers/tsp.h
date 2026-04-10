@@ -5,24 +5,41 @@
 
 enum TSP_SOLVING_STRATEGY {
     NN,
+    //solo NN, prova tutti i nodi di partenza fin quando non finisce tempo o nodi
     NN_TWO_OPT_MULTISTART,
+    //Esegue un NN con un solo nodo di partenza, esegue un 2 opt fino a ottimo locale o fine tempo. Alla fine, se ancora nodi o ancora tempo, riparte dall'inizio con un altro nodo di partenza
     NN_AND_TWO_OPT,
+    //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina UNA passata di 2opt fino a ottimo locale o a fine tempo refinement.
+
     NN_VNS_MULTISTART,
+    // NO SENSO, andrebbe tolto
     NN_AND_VNS,
-    NN_AND_TABU_SEARCH,
+    //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina un loop di (2opt -> NKick) fino alla fine del tempo
+
+
     GRASP,
+    //solo GRASP, prova tutti i nodi di partenza fin quando non finisce tempo o nodi
     GRASP_TWO_OPT_MULTISTART,
+    //Esegue un GRASP con un solo nodo di partenza, esegue un 2 opt fino a ottimo locale o fine tempo. Alla fine, se ancora nodi o ancora tempo, riparte dall'inizio con un altro nodo di partenza
+    //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina UNA passata di 2opt fino a ottimo locale o a fine tempo refinement.
     GRASP_AND_TWO_OPT,
+
     GRASP_VNS_MULTISTART,
+    // NO SENSO, andrebbe tolto
+
+
     GRASP_AND_VNS,
-    EXTRA_MILEAGE
+    //GRASP prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina un loop di (2opt -> NKick) fino alla fine del tempo
+
+    EXTRA_MILEAGE,
+
+    CPLEX
 };
 
 enum TSP_REFINEMENT_STRATEGY {
     NONE,
     TWO_OPT,
-    VNS,
-    TABU_SEARCH //TODO: Implement the tabu search
+    VNS
 };
 
 
