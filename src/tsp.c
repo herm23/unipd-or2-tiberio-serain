@@ -281,58 +281,16 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
         }
 
         switch (refinement) {
-            case TWO_OPT:
-            case VNS: {
+            case TWO_OPT: {
                 //NOTE: Performing vns kicks
-                int kick = 0;
-                do {
-                    //2-opt
-                    if (inst->verbosity >= DEBUG) printf("\n");
-                    twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                    if (inst->verbosity >= DEBUG) {
-                        printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
-                               temp_solution_cost,
-                               curr_time);
-                    }
-
-                    if (curr_time > time_limit) {
-                        exitStatus = 1;
-                        break;
-                    }
-
-                    if (refinement == VNS && kick < inst->VNS_kick_counter) {
-                        vns_kick(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                        if (inst->verbosity >= DEBUG) {
-                            printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
-                                   temp_solution_cost,
-                                   curr_time);
-                        }
-                    }
-
-                    if (curr_time > time_limit) {
-                        exitStatus = 1;
-                        break;
-                    }
-                    kick++;
-                } while (kick < inst->VNS_kick_counter);
-                // for(int i = 0; i < inst->VNS_kick_counter; i++)
-                // {
-                //     //2-opt
-                //     printf("\n");
-                //     twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                //     printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
-                //         temp_solution_cost,
-                //         curr_time);
-                //
-                //     //VNS-kick
-                //     if(refinement == VNS)
-                //     {
-                //         vns_kick(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                //         printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
-                //         temp_solution_cost,
-                //         curr_time);
-                //     }
-                // }
+                //2-opt
+                if (inst->verbosity >= DEBUG) printf("\n");
+                twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                if (inst->verbosity >= DEBUG) {
+                    printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
+                            temp_solution_cost,
+                            curr_time);
+                }
             }
             break;
 
@@ -341,6 +299,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
             break; //Nothing to do here
         }
 
+        //TODO: Sostituire questa procedura ripetitiva dentro ad una funzione
         if (inst->zbest < 0 || temp_solution_cost < inst->zbest - EPSILON) {
             if (is_solution_valid(inst, temp_solution)) {
                 inst->zbest = temp_solution_cost;
@@ -354,6 +313,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                     "\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
             }
         }
+
         if (inst->verbosity >= DEBUG) printf("\n\n");
         free(temp_solution);
 
@@ -606,7 +566,6 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
 short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
-    double curr_time = second() - inst->tstart;
     short exitStatus = 0;
 
     //NOTE: Generating random pointers
@@ -648,6 +607,7 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbe
     *zbest += get_precalculated_distance(inst, temp_solution[prev_max], temp_solution[max]);
     *zbest += get_precalculated_distance(inst, temp_solution[last_index], sol[0]);
 
+    double curr_time = second() - inst->tstart;
     *tbest = curr_time;
 
     memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);

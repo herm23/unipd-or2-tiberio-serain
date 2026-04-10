@@ -11,8 +11,6 @@ enum TSP_SOLVING_STRATEGY {
     NN_AND_TWO_OPT,
     //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina UNA passata di 2opt fino a ottimo locale o a fine tempo refinement.
 
-    NN_VNS_MULTISTART,
-    // NO SENSO, andrebbe tolto
     NN_AND_VNS,
     //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina un loop di (2opt -> NKick) fino alla fine del tempo
 
@@ -23,9 +21,6 @@ enum TSP_SOLVING_STRATEGY {
     //Esegue un GRASP con un solo nodo di partenza, esegue un 2 opt fino a ottimo locale o fine tempo. Alla fine, se ancora nodi o ancora tempo, riparte dall'inizio con un altro nodo di partenza
     //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina UNA passata di 2opt fino a ottimo locale o a fine tempo refinement.
     GRASP_AND_TWO_OPT,
-
-    GRASP_VNS_MULTISTART,
-    // NO SENSO, andrebbe tolto
 
 
     GRASP_AND_VNS,
@@ -39,7 +34,6 @@ enum TSP_SOLVING_STRATEGY {
 enum TSP_REFINEMENT_STRATEGY {
     NONE,
     TWO_OPT,
-    VNS
 };
 
 

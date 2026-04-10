@@ -95,19 +95,6 @@ void update_instance_solution(instance *inst, unsigned int *new_sol, double new_
 }
 
 /**
- * @brief Execute the refinement VNS: 2-opt -> Kick -> 2-opt.
- */
-void apply_vns_refinement(instance *inst, double timelimit, unsigned int *sol, double *cost, double *time) {
-    twoOpt_refinement(inst, timelimit, sol, cost, time);
-    vns_kick(inst, timelimit, sol, cost, time);
-
-    //Debug
-    //plot_solution(inst, sol, 0, 1);
-
-    twoOpt_refinement(inst, timelimit, sol, cost, time);
-}
-
-/**
  * @brief Prepara una soluzione temporanea partendo da quella attuale dell'istanza.
  */
 unsigned int *prepare_temp_solution(instance *inst, double *cost, double *time) {
@@ -152,7 +139,6 @@ short TSP_OPT(instance *inst) {
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
     switch (strategy) {
-        case NN_VNS_MULTISTART:
         case NN_AND_VNS: {
             inst->GRASP_alpha = 0;
             inst->VNS_kick_counter = 3;
@@ -165,7 +151,6 @@ short TSP_OPT(instance *inst) {
             inst->VNS_kick_counter = 0;
         }
         break;
-        case GRASP_VNS_MULTISTART:
         case GRASP_AND_VNS: {
             inst->GRASP_alpha = 0.1;
             inst->VNS_kick_counter = 3;
@@ -187,11 +172,6 @@ short TSP_OPT(instance *inst) {
             greedy_nn_heuristic(inst, inst->timelimit, TWO_OPT);
             break;
 
-        case NN_VNS_MULTISTART:
-        case GRASP_VNS_MULTISTART:
-            greedy_nn_heuristic(inst, inst->timelimit, VNS);
-            break;
-
         case NN_AND_TWO_OPT:
         case GRASP_AND_TWO_OPT: {
             double ratio = (strategy == GRASP_AND_TWO_OPT) ? 0.2 : 1.0;
@@ -209,15 +189,40 @@ short TSP_OPT(instance *inst) {
 
         case NN_AND_VNS:
         case GRASP_AND_VNS: {
-            double ratio = (strategy == GRASP_AND_VNS) ? 0.2 : 1.0;
-            greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
+            double ratio_constructive = 0.2;
+            double time_limit_constructive = inst->timelimit * ratio_constructive;
+
+            greedy_nn_heuristic(inst, time_limit_constructive, NONE);
 
             temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
+            
+            while(1)
+            {
+                //2-opt 
+                twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
 
-            apply_vns_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost,
-                                 &curr_time);
+                //Update sol
+                update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+                
+                //Vns kick
+                for(int i = 0; i < inst->VNS_kick_counter; i++)
+                {
+                    vns_kick(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
+                    if (inst->verbosity >= DEBUG)
+                    {
+                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
+                               temp_solution_cost,
+                               curr_time);
+                    }
+                }
 
-            update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+                double curr_time = second() - inst->tstart;
+                
+                if (inst->timelimit != 0 && curr_time > inst->timelimit) {
+                    break;
+                }
+            }
+
             free(temp_solution);
         }
         break;
