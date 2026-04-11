@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 //region Plots
 /**
@@ -469,32 +470,59 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
     while (1) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
         memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+        //NOTE: Tabu search is already implemented in this step due to parameter definition
         double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
+        inst->iterations++; //NOTE: Update iterations after 2-opt !
         initial_cost += temp_solution_cost_delta;
 
         curr_time = second() - inst->tstart;
         if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
                                              curr_time);
 
-        //TODO: Add Vns case and call always this method.
-        if (temp_solution_cost_delta > -EPSILON)
+        //NOTE: In this case always update the solution
+        if (temp_solution_cost_delta < -EPSILON)
+        {
+            *zbest += temp_solution_cost_delta;
+            *tbest = curr_time;
+            memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
+        }
+
+        if(inst->VNS_kick_counter > 0) //VNS Implementation
+        {
+            //NOTE: I'apply the VNS Kick only if we have reached the minimum
+            if (temp_solution_cost_delta > -EPSILON)
+            {
+                // Vns kick
+                for (int i = 0; i < inst->VNS_kick_counter; i++)
+                {
+                    //NOTE: If the time is finisched we break the cycle and the all refinement prob.
+                    if(vns_kick(inst, inst->timelimit, temp_solution, &initial_cost) == 1)
+                        break;
+
+                    // DEBUG
+                    // plot_solution(inst, temp_solution, 0, 0);
+
+                    if (inst->verbosity >= DEBUG)
+                    {
+                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
+                    }
+                }
+            }
+        }
+        else if (temp_solution_cost_delta > -EPSILON)  //Usual 2-opt
+        {
+            free(temp_solution); //NOTE: Let's avoid memory leak
             return 0;
+        }    
 
-        // if (fabs(temp_solution_cost_delta) > (*zbest) + EPSILON)
-        // {
-        //     printf("\n!!! DEBUG ERROR: Delta (%.2lf) is greater than current cost (%.2lf) !!!\n", fabs(temp_solution_cost_delta), *zbest);
-        // }
-
-        //WARNING: Implementing the vns here you have to update BEFORE DOING THE kick
-        *zbest += temp_solution_cost_delta;
-        *tbest = curr_time;
-        memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
         free(temp_solution);
 
+        //NOTE: Check the time limit
         if (time_limit != 0 && curr_time > time_limit) {
             exitStatus = 1;
             break;
         }
+
         plot_solution(inst, sol, 0, 0);
         // #ifdef _WIN32
         //         Sleep(100);
@@ -536,8 +564,9 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
 
             double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
 
-            //TODO: Not in tabulist if exist
-            if (deltaCost < minDeltaCost - EPSILON ) {
+            bool isTabu = inst->tenure > 0 ? ((inst->iterations - inst->tabulist[i] <= inst->tenure) || (inst->iterations - inst->tabulist[j] <= inst->tenure)) : false;
+
+            if (!isTabu && deltaCost < (minDeltaCost - EPSILON)) {
                 minDeltaCost = deltaCost;
                 a = i;
                 b = j;
@@ -545,11 +574,18 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
         }
     }
 
-    //TODO: Update tabulist
-    if (minDeltaCost < -EPSILON) {
+    //NOTE: If we are in the Tabu search mode i have to update the solution with the bost possible move founded
+    if (minDeltaCost < -EPSILON || inst-> tenure > 0) {
         //MOVE
         swap(&sol[a + 1], &sol[b], sizeof(int));
         reverse_subarray_circular(sol, nodes, a + 2, b);
+
+        //Update tabu List
+        if(inst->tenure > 0)
+        {
+            inst->tabulist[a] = inst->iterations;
+            inst->tabulist[b] = inst->iterations;
+        }
     }
 
     return minDeltaCost;
@@ -560,10 +596,9 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
  * @brief Applies the 3-opt kick by swapping 2 parts of the solution array
  *
  * @param inst Pointer to the instance structure.
- * @param time_limit The maximum time allowed for the refinement.
- * @param sol Pointer to the solution array to be refined.
- * @param zbest Pointer to the variable storing the cost of the best solution found.
- * @param tbest Pointer to the variable storing the time when the best solution was found.
+ * @param time_limit The maximum time allowed for the kick.
+ * @param sol Pointer to the solution array to be kicked.
+ * @param sol_cost Pointer to the variable storing the cost of the update solution.
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
 short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol_cost) {

@@ -135,6 +135,7 @@ short TSP_OPT(instance *inst) {
     double curr_time;
 
     enum TSP_SOLVING_STRATEGY strategy = inst->model_type;
+    inst->iterations = 1;
     inst->tabulist = (long long*)calloc(inst->nnodes, sizeof(long long));
 
     //NOTE: Managing hyperparameters without code duplication
@@ -184,7 +185,11 @@ short TSP_OPT(instance *inst) {
             break;
 
         case NN_AND_TWO_OPT:
-        case GRASP_AND_TWO_OPT: {
+        case GRASP_AND_TWO_OPT:
+        case NN_AND_VNS:
+        case GRASP_AND_VNS:
+        case NN_AND_TABUSEARCH:
+        case GRASP_AND_TABUSEARCH: {
             double ratio = (strategy == GRASP_AND_TWO_OPT) ? 0.2 : 1.0;
             greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
 
@@ -194,77 +199,6 @@ short TSP_OPT(instance *inst) {
                               &curr_time);
 
             update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
-            free(temp_solution);
-        }
-        break;
-
-        case NN_AND_VNS:
-        case GRASP_AND_VNS: {
-            double ratio_constructive = 0.2;
-            double time_limit_constructive = inst->timelimit * ratio_constructive;
-
-            greedy_nn_heuristic(inst, time_limit_constructive, NONE);
-
-            temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
-            
-            while(1)
-            {
-                //2-opt 
-                twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
-
-                //Update sol
-                update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
-                
-                //Vns kick
-                for(int i = 0; i < inst->VNS_kick_counter; i++)
-                {
-                    vns_kick(inst, inst->timelimit, temp_solution, &temp_solution_cost);
-
-                    //DEBUG
-                    plot_solution(inst, temp_solution, 0, 0);
-
-                    if (inst->verbosity >= DEBUG)
-                    {
-                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", temp_solution_cost, curr_time);
-                    }
-                }
-
-                double curr_time = second() - inst->tstart;
-                
-                if (inst->timelimit != 0 && curr_time > inst->timelimit) {
-                    break;
-                }
-            }
-
-            free(temp_solution);
-        }
-        break;
-
-        case NN_AND_TABUSEARCH:
-        case GRASP_AND_TABUSEARCH:
-        {
-            //TODO: Finish tabu search (Remove this case and add all tabu + vns to the same method)
-            //TODO: Check on time limit
-            //TODO: Plot the new chart
-
-            double ratio_constructive = 0.2;
-            double time_limit_constructive = inst->timelimit * ratio_constructive;
-
-            greedy_nn_heuristic(inst, time_limit_constructive, NONE);
-
-            temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
-            
-            while(1)
-            {
-                twoOpt_refinement_iteration(inst, temp_solution);
-
-                double curr_time = second() - inst->tstart;
-                
-                if (inst->timelimit != 0 && curr_time > inst->timelimit) {
-                    break;
-                }
-            }
-
             free(temp_solution);
         }
         break;
