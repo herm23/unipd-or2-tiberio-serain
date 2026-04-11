@@ -153,6 +153,7 @@ void free_instance(instance *inst) {
     free(inst->ycoord);
     free(inst->distances);
     free(inst->solution);
+    free(inst->tabulist);
     if (inst->plot)
         pclose(inst->plot);
 }

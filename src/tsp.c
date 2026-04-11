@@ -475,14 +475,17 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         curr_time = second() - inst->tstart;
         if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
                                              curr_time);
+
+        //TODO: Add Vns case and call always this method.
         if (temp_solution_cost_delta > -EPSILON)
             return 0;
 
-        if (fabs(temp_solution_cost_delta) > (*zbest) + EPSILON)
-        {
-            printf("\n!!! DEBUG ERROR: Delta (%.2lf) is greater than current cost (%.2lf) !!!\n", fabs(temp_solution_cost_delta), *zbest);
-        }
+        // if (fabs(temp_solution_cost_delta) > (*zbest) + EPSILON)
+        // {
+        //     printf("\n!!! DEBUG ERROR: Delta (%.2lf) is greater than current cost (%.2lf) !!!\n", fabs(temp_solution_cost_delta), *zbest);
+        // }
 
+        //WARNING: Implementing the vns here you have to update BEFORE DOING THE kick
         *zbest += temp_solution_cost_delta;
         *tbest = curr_time;
         memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
@@ -533,7 +536,8 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
 
             double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
 
-            if (deltaCost < minDeltaCost - EPSILON) {
+            //TODO: Not in tabulist if exist
+            if (deltaCost < minDeltaCost - EPSILON ) {
                 minDeltaCost = deltaCost;
                 a = i;
                 b = j;
@@ -541,6 +545,7 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
         }
     }
 
+    //TODO: Update tabulist
     if (minDeltaCost < -EPSILON) {
         //MOVE
         swap(&sol[a + 1], &sol[b], sizeof(int));
@@ -623,4 +628,12 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
     }
 
     return exitStatus;
+}
+
+
+short tabu_search_iteration(){
+    //TODO: Perform 1 move of the tabu search
+
+
+
 }

@@ -135,6 +135,7 @@ short TSP_OPT(instance *inst) {
     double curr_time;
 
     enum TSP_SOLVING_STRATEGY strategy = inst->model_type;
+    inst->tabulist = (long long*)calloc(inst->nnodes, sizeof(long long));
 
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
@@ -142,6 +143,7 @@ short TSP_OPT(instance *inst) {
         case NN_AND_VNS: {
             inst->GRASP_alpha = 0;
             inst->VNS_kick_counter = 3;
+            inst->tenure = 0;
         }
         break;
         case GRASP:
@@ -149,16 +151,25 @@ short TSP_OPT(instance *inst) {
         case GRASP_AND_TWO_OPT: {
             inst->GRASP_alpha = 0.1;
             inst->VNS_kick_counter = 0;
+            inst->tenure = 0;
         }
         break;
         case GRASP_AND_VNS: {
             inst->GRASP_alpha = 0.1;
             inst->VNS_kick_counter = 3;
+            inst->tenure = 0;
+        }
+        break;
+        case NN_AND_TABUSEARCH:
+        case GRASP_AND_TABUSEARCH: {
+            inst->tenure = 50;
+            inst->VNS_kick_counter = 0;
         }
         break;
         default:
             inst->GRASP_alpha = 0;
             inst->VNS_kick_counter = 0;
+            inst->tenure = 0;
     }
 
     switch (strategy) {
@@ -217,6 +228,35 @@ short TSP_OPT(instance *inst) {
                         printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", temp_solution_cost, curr_time);
                     }
                 }
+
+                double curr_time = second() - inst->tstart;
+                
+                if (inst->timelimit != 0 && curr_time > inst->timelimit) {
+                    break;
+                }
+            }
+
+            free(temp_solution);
+        }
+        break;
+
+        case NN_AND_TABUSEARCH:
+        case GRASP_AND_TABUSEARCH:
+        {
+            //TODO: Finish tabu search (Remove this case and add all tabu + vns to the same method)
+            //TODO: Check on time limit
+            //TODO: Plot the new chart
+
+            double ratio_constructive = 0.2;
+            double time_limit_constructive = inst->timelimit * ratio_constructive;
+
+            greedy_nn_heuristic(inst, time_limit_constructive, NONE);
+
+            temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
+            
+            while(1)
+            {
+                twoOpt_refinement_iteration(inst, temp_solution);
 
                 double curr_time = second() - inst->tstart;
                 

@@ -32,7 +32,7 @@ typedef struct {
     int VNS_kick_counter;
 
     int tenure;
-    int * tabulist;
+    long long * tabulist;
 
     //global data
     double zbest; // best sol. available
