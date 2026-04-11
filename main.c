@@ -207,7 +207,11 @@ short TSP_OPT(instance *inst) {
                 //Vns kick
                 for(int i = 0; i < inst->VNS_kick_counter; i++)
                 {
-                    vns_kick(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
+                    vns_kick(inst, inst->timelimit, temp_solution, &temp_solution_cost);
+
+                    //DEBUG
+                    plot_solution(inst, temp_solution, 0, 0);
+
                     if (inst->verbosity >= DEBUG)
                     {
                         printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", temp_solution_cost, curr_time);

@@ -84,41 +84,31 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
 
         fprintf(inst->plot, "e\n");
     } else {
-        /* ---- Plot nodes + tour ---- */
+        /* ---- Plot nodes + tour with ARROWS ---- */
+        // "with vectors" disegna una freccia da (x,y) a (x+dx, y+dy)
         fprintf(inst->plot,
-                "plot '-' with lines lw 2 lc rgb 'red', "
+                "plot '-' with vectors head filled lw 2 lc rgb 'red', "
                 "'-' with points pt 7 ps 1.5 lc rgb 'blue'\n");
 
-        /* ---- Tour edges (closed) ---- */
+        /* ---- Tour edges as vectors ---- */
         for (int i = 0; i < inst->nnodes; ++i) {
-            int idx = solution[i];
+            int curr = solution[i];
+            int next = solution[(i + 1) % inst->nnodes]; // Il prossimo nodo (chiusura automatica)
 
-            if (idx < 0 || idx >= inst->nnodes) {
-                if (inst->verbosity >= SILENT) fprintf(stderr, "plot_tour error: invalid index in solution\n");
-                pclose(inst->plot);
-                return;
-            }
+            double x = inst->xcoord[curr];
+            double y = inst->ycoord[curr];
+            // Calcoliamo lo spostamento (delta) verso il prossimo nodo
+            double dx = inst->xcoord[next] - x;
+            double dy = inst->ycoord[next] - y;
 
-            fprintf(inst->plot, "%f %f\n",
-                    inst->xcoord[idx],
-                    inst->ycoord[idx]);
+            fprintf(inst->plot, "%f %f %f %f\n", x, y, dx, dy);
         }
-
-        /* Close the tour */
-        int first = solution[0];
-        fprintf(inst->plot, "%f %f\n",
-                inst->xcoord[first],
-                inst->ycoord[first]);
-
         fprintf(inst->plot, "e\n");
 
-        /* ---- Nodes ---- */
+        /* ---- Nodes (stessa logica di prima) ---- */
         for (int i = 0; i < inst->nnodes; ++i) {
-            fprintf(inst->plot, "%f %f\n",
-                    inst->xcoord[i],
-                    inst->ycoord[i]);
+            fprintf(inst->plot, "%f %f\n", inst->xcoord[i], inst->ycoord[i]);
         }
-
         fprintf(inst->plot, "e\n");
     }
 
@@ -473,6 +463,8 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
     short exitStatus = 0;
 
     double initial_cost = calculate_solution_cost(inst, sol);
+    double curr_time = second() - inst->tstart;
+    if (inst->verbosity >= DEBUG) printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
 
     while (1) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
@@ -480,7 +472,7 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
         initial_cost += temp_solution_cost_delta;
 
-        double curr_time = second() - inst->tstart;
+        curr_time = second() - inst->tstart;
         if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
                                              curr_time);
         if (temp_solution_cost_delta > -EPSILON)
@@ -569,7 +561,7 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
  * @param tbest Pointer to the variable storing the time when the best solution was found.
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
-short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
+short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol_cost) {
     short exitStatus = 0;
 
     //NOTE: Generating random pointers
@@ -587,32 +579,41 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbe
 
     //NOTE: Tmp array
     unsigned int *temp_solution = malloc(inst->nnodes * sizeof(unsigned int));
+    double new_cost = 0; // Usato double per precisione con i costi reali
     int tmp_index = 0;
 
     //NOTE: Copying the first part
-    for (int i = 0; i < min; i++) temp_solution[tmp_index++] = sol[i];
+    for (int i = 0; i < min; i++) 
+    {
+        temp_solution[tmp_index++] = sol[i];
+
+        if(tmp_index > 1)
+        {
+            new_cost += get_precalculated_distance(inst, temp_solution[tmp_index-2], temp_solution[tmp_index-1]);
+        }
+    }
 
     //NOTE: Copying the second part
-    for (int i = max; i < inst->nnodes; i++) temp_solution[tmp_index++] = sol[i];
+    for (int i = max; i < inst->nnodes; i++) 
+    {
+        temp_solution[tmp_index++] = sol[i];
+        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index-2], temp_solution[tmp_index-1]);
+    }
 
     //NOTE: Copying the last part
-    for (int i = min; i < max; i++) temp_solution[tmp_index++] = sol[i];
+    for (int i = min; i < max; i++) 
+    {
+        temp_solution[tmp_index++] = sol[i];
+        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index-2], temp_solution[tmp_index-1]);
+    }
+
+    //Last arc
+    new_cost += get_precalculated_distance(inst, temp_solution[inst->nnodes-1], temp_solution[0]);
 
     //NOTE: Adjusting costs and time
-    int last_index = inst->nnodes - 1;
-    int prev_min = min > 0 ? (min - 1) : last_index;
-    int prev_max = max > 0 ? (max - 1) : last_index;
-
-    *zbest -= get_precalculated_distance(inst, sol[prev_min], sol[min]);
-    *zbest -= get_precalculated_distance(inst, sol[prev_max], sol[max]);
-    *zbest -= get_precalculated_distance(inst, sol[last_index], sol[0]);
-
-    *zbest += get_precalculated_distance(inst, temp_solution[prev_min], temp_solution[min]);
-    *zbest += get_precalculated_distance(inst, temp_solution[prev_max], temp_solution[max]);
-    *zbest += get_precalculated_distance(inst, temp_solution[last_index], sol[0]);
+    *sol_cost = new_cost;
 
     double curr_time = second() - inst->tstart;
-    *tbest = curr_time;
 
     memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
     free(temp_solution);

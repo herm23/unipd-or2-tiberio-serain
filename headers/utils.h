@@ -25,6 +25,8 @@ typedef struct {
     double timelimit; // overall time limit, in sec.s
     char input_file[1000]; // input file
 
+    int iterations; //num of times that a new solutions has been computed
+
     // technique hyperparams
     double GRASP_alpha; //The alpha parameter for the GRASP heuristic (0 = greedy, 1 = random).
     int VNS_kick_counter;
@@ -44,7 +46,9 @@ typedef struct {
     int verbosity; // verbosity level
     char out_file[1000]; // output file for solution
 
-    FILE *plot;
+    FILE *plot; //Tour plot
+    FILE *cost_plot; //Cost vs iteration plot
+
 } instance;
 
 //endregion STRUCTURES
