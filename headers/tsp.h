@@ -4,30 +4,36 @@
 #include "utils.h"
 
 enum TSP_SOLVING_STRATEGY {
+    // only NN, tries all starting nodes until time or nodes run out
     NN,
-    //solo NN, prova tutti i nodi di partenza fin quando non finisce tempo o nodi
+    
+    // Executes an NN with a single starting node, executes a 2-opt until local optimum or end of time. At the end, if there are still nodes or time, restarts from the beginning with another starting node
     NN_TWO_OPT_MULTISTART,
-    //Esegue un NN con un solo nodo di partenza, esegue un 2 opt fino a ottimo locale o fine tempo. Alla fine, se ancora nodi o ancora tempo, riparte dall'inizio con un altro nodo di partenza
+    
+    // NN tries all starting nodes until time (construction) or nodes run out, then at the end ONE pass of 2-opt until local optimum or end of refinement time.
     NN_AND_TWO_OPT,
-    //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina UNA passata di 2opt fino a ottimo locale o a fine tempo refinement.
-
+    
+    // NN tries all starting nodes until time (construction) or nodes run out, then at the end a loop of (2-opt -> NKick) until the end of time
     NN_AND_VNS,
-    //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina un loop di (2opt -> NKick) fino alla fine del tempo
-
-
+    
+    NN_AND_TABUSEARCH,
+    
+    // only GRASP, tries all starting nodes until time or nodes run out
     GRASP,
-    //solo GRASP, prova tutti i nodi di partenza fin quando non finisce tempo o nodi
+    
+    // Executes a GRASP with a single starting node, executes a 2-opt until local optimum or end of time. At the end, if there are still nodes or time, restarts from the beginning with another starting node
     GRASP_TWO_OPT_MULTISTART,
-    //Esegue un GRASP con un solo nodo di partenza, esegue un 2 opt fino a ottimo locale o fine tempo. Alla fine, se ancora nodi o ancora tempo, riparte dall'inizio con un altro nodo di partenza
-    //NN prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina UNA passata di 2opt fino a ottimo locale o a fine tempo refinement.
+    
+    // NN tries all starting nodes until time (construction) or nodes run out, then at the end ONE pass of 2-opt until local optimum or end of refinement time.
     GRASP_AND_TWO_OPT,
-
-
+    
+    // GRASP tries all starting nodes until time (construction) or nodes run out, then at the end a loop of (2-opt -> NKick) until the end of time
     GRASP_AND_VNS,
-    //GRASP prova tutti i nodi di partenza fin quando non finisce tempo (di costruzione) o nodi, poi alla fina un loop di (2opt -> NKick) fino alla fine del tempo
-
+    
+    GRASP_AND_TABUSEARCH,
+    
     EXTRA_MILEAGE,
-
+    
     CPLEX
 };
 

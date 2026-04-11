@@ -118,7 +118,7 @@ short TSP_OPT(instance *inst) {
     plot_solution(inst, inst->solution, 1, 1);
     plot_solution(inst, inst->solution, 0, 1);
 
-
+    //NOTE: The starting time is setted AFTER having seen the initial points and it's random initialization
     const double starting_time = second();
 
     const double solution_cost = calculate_solution_cost(inst, inst->solution);
@@ -210,9 +210,7 @@ short TSP_OPT(instance *inst) {
                     vns_kick(inst, inst->timelimit, temp_solution, &temp_solution_cost, &curr_time);
                     if (inst->verbosity >= DEBUG)
                     {
-                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.2lf",
-                               temp_solution_cost,
-                               curr_time);
+                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", temp_solution_cost, curr_time);
                     }
                 }
 

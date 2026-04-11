@@ -160,6 +160,61 @@ void free_instance(instance *inst) {
 //endregion MEMORY MANAGEMENT
 
 //region PARSER
+
+/**
+ * @brief Displays the program header including the current system date.
+ *
+ * Generates a versioning string based on the execution date (format: DD-MMM-YYYY) 
+ * and prints it as part of the "available parameters" section of the output.
+ */
+void print_header() {
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    char date_str[32];
+
+    // Array di mesi abbreviati per corrispondere al tuo formato
+    const char *months[] = {"jan", "feb", "mar", "apr", "may", "jun", 
+                            "jul", "aug", "sep", "oct", "nov", "dec"};
+
+    // Formattiamo la data: %02d forza lo zero iniziale per i giorni < 10
+    sprintf(date_str, "%02d-%s-%d", tm->tm_mday, months[tm->tm_mon], tm->tm_year + 1900);
+
+    printf("available parameters (vers. %s) --------------------------------------------------\n", date_str);
+}
+
+/**
+ * @brief Prints the list of available TSP solving strategies with their corresponding numeric indices.
+ *
+ * This function iterates through the TSP_SOLVING_STRATEGY enumeration and 
+ * displays each strategy with its numeric index using a switch statement for mapping.
+ */
+void print_tsp_strategies() {
+    printf("Strategie disponibili:\n  ");
+    
+    // Usiamo CPLEX come limite superiore del ciclo essendo l'ultimo elemento
+    for (int i = 0; i <= CPLEX; i++) {
+        char* name;
+        switch ((enum TSP_SOLVING_STRATEGY)i) {
+            case NN:                        name = "NN"; break;
+            case NN_TWO_OPT_MULTISTART:     name = "NN_2OPT_MS"; break;
+            case NN_AND_TWO_OPT:            name = "NN_2OPT"; break;
+            case NN_AND_VNS:                name = "NN_VNS"; break;
+            case NN_AND_TABUSEARCH:         name = "NN_TABU"; break;
+            case GRASP:                     name = "GRASP"; break;
+            case GRASP_TWO_OPT_MULTISTART:  name = "GRASP_2OPT_MS"; break;
+            case GRASP_AND_TWO_OPT:         name = "GRASP_2OPT"; break;
+            case GRASP_AND_VNS:             name = "GRASP_VNS"; break;
+            case GRASP_AND_TABUSEARCH:      name = "GRASP_TABU"; break;
+            case EXTRA_MILEAGE:             name = "EXTRA_MILEAGE"; break;
+            case CPLEX:                     name = "CPLEX"; break;
+            default:                        name = "UNKNOWN"; break;
+        }
+        
+        printf("%d: %s%s", i, name, (i == CPLEX ? "" : ", "));
+    }
+    printf("\n");
+}
+
 /**
  * @brief Implementation of the command line parser.
  * 
@@ -255,11 +310,11 @@ void parse_command_line(int argc, char **argv, instance *inst) {
 
     if (help || (inst->verbosity >= INFO)) // print current parameters
     {
-        printf("\n\navailable parameters (vers. 16-may-2015) --------------------------------------------------\n");
+        print_header();
         printf("-file %s\n", inst->input_file);
         printf("-time_limit %lf\n", inst->timelimit);
         printf("-model_type %d\n", inst->model_type);
-        printf("  0: NN, 1: NN_2OPT_MS, 2: NN_2OPT, 3: NN_VNS_MS, 4: NN_VNS, 5: GRASP, 6: GRASP_2OPT_MS, 7: GRASP_2OPT, 8: GRASP_VNS_MS, 9: GRASP_VNS, 10: EXTRA_MILEAGE\n");
+        print_tsp_strategies();
         printf("-seed %d\n", inst->randomseed);
         printf("-verbosity %d\n", inst->verbosity);
         printf("\nenter -help or --help for help\n");

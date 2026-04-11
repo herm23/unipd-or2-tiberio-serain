@@ -299,7 +299,6 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
             break; //Nothing to do here
         }
 
-        //TODO: Sostituire questa procedura ripetitiva dentro ad una funzione
         if (inst->zbest < 0 || temp_solution_cost < inst->zbest - EPSILON) {
             if (is_solution_valid(inst, temp_solution)) {
                 inst->zbest = temp_solution_cost;
@@ -486,6 +485,11 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                                              curr_time);
         if (temp_solution_cost_delta > -EPSILON)
             return 0;
+
+        if (fabs(temp_solution_cost_delta) > (*zbest) + EPSILON)
+        {
+            printf("\n!!! DEBUG ERROR: Delta (%.2lf) is greater than current cost (%.2lf) !!!\n", fabs(temp_solution_cost_delta), *zbest);
+        }
 
         *zbest += temp_solution_cost_delta;
         *tbest = curr_time;
