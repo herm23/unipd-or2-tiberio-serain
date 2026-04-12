@@ -554,6 +554,9 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                     printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
                 }
             }
+
+            //Debug
+            // plot_solution(inst, temp_solution, 0, 0);
         }
 
 
