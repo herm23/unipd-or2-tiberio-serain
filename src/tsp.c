@@ -536,7 +536,10 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
 
         if (temp_solution_cost_delta >= -EPSILON) {
             if (inst->VNS_kick_counter == 0)
+            {
+                free(temp_solution);
                 break;
+            }
             // Vns kick
             for (int i = 0; i < inst->VNS_kick_counter; i++) {
                 //NOTE: If the time is finished we break the cycle and the all refinement prob.
