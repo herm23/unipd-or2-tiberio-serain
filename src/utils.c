@@ -156,6 +156,9 @@ void free_instance(instance *inst) {
     free(inst->tabulist);
     if (inst->plot)
         pclose(inst->plot);
+
+    if (inst->cost_plot)
+        fclose(inst->cost_plot);
 }
 
 //endregion MEMORY MANAGEMENT
@@ -174,8 +177,10 @@ void print_header() {
     char date_str[32];
 
     // Array di mesi abbreviati per corrispondere al tuo formato
-    const char *months[] = {"jan", "feb", "mar", "apr", "may", "jun", 
-                            "jul", "aug", "sep", "oct", "nov", "dec"};
+    const char *months[] = {
+        "jan", "feb", "mar", "apr", "may", "jun",
+        "jul", "aug", "sep", "oct", "nov", "dec"
+    };
 
     // Formattiamo la data: %02d forza lo zero iniziale per i giorni < 10
     sprintf(date_str, "%02d-%s-%d", tm->tm_mday, months[tm->tm_mon], tm->tm_year + 1900);
@@ -186,31 +191,44 @@ void print_header() {
 /**
  * @brief Prints the list of available TSP solving strategies with their corresponding numeric indices.
  *
- * This function iterates through the TSP_SOLVING_STRATEGY enumeration and 
+ * This function iterates through the TSP_SOLVING_STRATEGY enumeration and
  * displays each strategy with its numeric index using a switch statement for mapping.
  */
 void print_tsp_strategies() {
     printf("Strategie disponibili:\n  ");
-    
+
     // Usiamo CPLEX come limite superiore del ciclo essendo l'ultimo elemento
     for (int i = 0; i <= CPLEX; i++) {
-        char* name;
-        switch ((enum TSP_SOLVING_STRATEGY)i) {
-            case NN:                        name = "NN"; break;
-            case NN_TWO_OPT_MULTISTART:     name = "NN_2OPT_MS"; break;
-            case NN_AND_TWO_OPT:            name = "NN_2OPT"; break;
-            case NN_AND_VNS:                name = "NN_VNS"; break;
-            case NN_AND_TABUSEARCH:         name = "NN_TABU"; break;
-            case GRASP:                     name = "GRASP"; break;
-            case GRASP_TWO_OPT_MULTISTART:  name = "GRASP_2OPT_MS"; break;
-            case GRASP_AND_TWO_OPT:         name = "GRASP_2OPT"; break;
-            case GRASP_AND_VNS:             name = "GRASP_VNS"; break;
-            case GRASP_AND_TABUSEARCH:      name = "GRASP_TABU"; break;
-            case EXTRA_MILEAGE:             name = "EXTRA_MILEAGE"; break;
-            case CPLEX:                     name = "CPLEX"; break;
-            default:                        name = "UNKNOWN"; break;
+        char *name;
+        switch ((enum TSP_SOLVING_STRATEGY) i) {
+            case NN: name = "NN";
+                break;
+            case NN_TWO_OPT_MULTISTART: name = "NN_2OPT_MS";
+                break;
+            case NN_AND_TWO_OPT: name = "NN_2OPT";
+                break;
+            case NN_AND_VNS: name = "NN_VNS";
+                break;
+            case NN_AND_TABUSEARCH: name = "NN_TABU";
+                break;
+            case GRASP: name = "GRASP";
+                break;
+            case GRASP_TWO_OPT_MULTISTART: name = "GRASP_2OPT_MS";
+                break;
+            case GRASP_AND_TWO_OPT: name = "GRASP_2OPT";
+                break;
+            case GRASP_AND_VNS: name = "GRASP_VNS";
+                break;
+            case GRASP_AND_TABUSEARCH: name = "GRASP_TABU";
+                break;
+            case EXTRA_MILEAGE: name = "EXTRA_MILEAGE";
+                break;
+            case CPLEX: name = "CPLEX";
+                break;
+            default: name = "UNKNOWN";
+                break;
         }
-        
+
         printf("%d: %s%s", i, name, (i == CPLEX ? "" : ", "));
     }
     printf("\n");
@@ -218,7 +236,7 @@ void print_tsp_strategies() {
 
 /**
  * @brief Implementation of the command line parser.
- * 
+ *
  * @param argc The number of command line arguments.
  * @param argv The array of command line arguments.
  * @param inst Pointer to the instance structure to be populated.
@@ -346,7 +364,7 @@ double calculate_distance(unsigned int i, unsigned int j, const instance *inst) 
 
 /**
  * @brief Calculates the squared distance between two nodes.
- * 
+ *
  * @param i Index of the first node.
  * @param j Index of the second node.
  * @param inst Pointer to the instance structure.
@@ -365,14 +383,14 @@ double calculate_squared_distance(unsigned int i, unsigned int j, const instance
 //region INPUT READER
 /**
  * @brief Implementation of the input reader.
- * 
+ *
  * @param inst Pointer to the instance structure to be populated.
  */
 
 //WARNING: Does it makes sense to print_error and exit program ?
 /**
  * @brief Parses a TSP file in TSPLIB format and populates the instance structure.
- * 
+ *
  * @param inst Pointer to the instance structure.
  */
 void parse_tsp_file(instance *inst) {
@@ -383,6 +401,7 @@ void parse_tsp_file(instance *inst) {
 
     inst->nnodes = -1;
     inst->plot = NULL;
+    inst->cost_plot = NULL;
 
     char line[180];
     char *par_name;
@@ -488,7 +507,7 @@ void parse_tsp_file(instance *inst) {
 
 /**
  * @brief Generates a random TSP instance with a specified number of nodes.
- * 
+ *
  * @param inst Pointer to the instance structure.
  */
 void generate_random_instance(instance *inst) {
@@ -508,19 +527,24 @@ void generate_random_instance(instance *inst) {
 
     if (inst->randomseed != DEFAULTSEEDVAL) {
         srand(inst->randomseed);
-    }else {
+    } else {
         srand(time(0));
     }
 
     for (int i = 0; i < inst->nnodes; i++) {
         inst->xcoord[i] = ((double) rand() / (double) RAND_MAX) * XMAX;
         inst->ycoord[i] = ((double) rand() / (double) RAND_MAX) * YMAX;
+
+        if (inst->verbosity >= TRACE) {
+            printf("Point %d, has cooordinates (%lf, %lf)\n", i, inst->xcoord[i], inst->ycoord[i]);
+        }
     }
 
     if (inst->verbosity >= INFO) {
         printf(" ... generated random instance with %d nodes and seed %u\n", inst->nnodes, inst->randomseed);
     }
     inst->plot = NULL;
+    inst->cost_plot = NULL;
 }
 
 /**
