@@ -175,6 +175,18 @@ short is_solution_valid(const instance *inst, const unsigned int *solution, cons
     return 1;
 }
 
+short log_and_check_sol(const instance *inst, const unsigned int *solution, const double expected_cost){
+    if (is_solution_valid(inst, solution, expected_cost)) {
+        if (inst->verbosity >= DEBUG) {
+            printf("[VALIDATION] Success: Tour is a valid Hamiltonian cycle. Cost: %lf\n", expected_cost);
+            plot_solution(inst, solution, 0, 0);
+        }
+    } else {
+        // Questo è il print più importante in fase di sviluppo
+        printf("[VALIDATION] ERROR: Invalid tour detected! (Check for duplicates or missing nodes)\n");
+    }
+}
+
 /**
  * @brief Calculates the total cost of a given solution.
  *
@@ -504,8 +516,8 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
 
 
     while (1) {
-        unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
-        memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+        // unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
+        // memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
 
         //NOTE: Print the starting cost (it's redundant for debug)
         if (inst->verbosity >= DEBUG) printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
@@ -519,12 +531,15 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
             printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
                    curr_time);
 
+        //Debug
+        // if(inst->tenure>0 && temp_solution_cost_delta > 0)
+        //     log_and_check_sol(inst, temp_solution, initial_cost);
 
         // plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
 
         if (initial_cost < *zbest - EPSILON) {
             *zbest = initial_cost;
-            //TODO ora che hai il vns non puoi andare sempre in delta, ma devi restare allineato al 2opt
+            //TODO ora che hai il vns non puoi andare sempre in delta, ma devi restare allineato al 2opt (Apposto ??)
             *tbest = curr_time;
             memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
             if (inst->verbosity >= INFO) {
@@ -533,8 +548,8 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         }
         plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
 
-
-        if (temp_solution_cost_delta >= -EPSILON) {
+        //NOTE: If i'm in a local minima and NOT in tabu
+        if (temp_solution_cost_delta >= -EPSILON && inst->tenure == 0) {
             if (inst->VNS_kick_counter == 0)
             {
                 free(temp_solution);
@@ -546,15 +561,7 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                 int kick_status = vns_kick(inst, inst->timelimit, temp_solution, &initial_cost);
 
                 //Debug
-                // if (is_solution_valid(inst, temp_solution, initial_cost)) {
-                //     if (inst->verbosity >= DEBUG) {
-                //         printf("[VALIDATION] Success: Tour is a valid Hamiltonian cycle. Cost: %lf\n", initial_cost);
-                //         plot_solution(inst, temp_solution, 0, 0);
-                //     }
-                // } else {
-                //     // Questo è il print più importante in fase di sviluppo
-                //     printf("[VALIDATION] ERROR: Invalid tour detected! (Check for duplicates or missing nodes)\n");
-                // }
+                //log_and_check_sol(inst, temp_solution, initial_cost);
 
                 plot_iteration(inst, initial_cost, *zbest, "kick");
 
@@ -591,6 +598,7 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
 double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
     const int nodes = inst->nnodes;
 
+    bool isDeltaSetted = false;
     double minDeltaCost = 0;
     unsigned int a = -1, b = -1;
 
@@ -611,18 +619,21 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
 
             double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
 
-            bool isTabu = inst->tenure > 0
-                              ? ((inst->iterations - inst->tabulist[i] <= inst->tenure) || (
-                                     inst->iterations - inst->tabulist[j] <= inst->tenure))
-                              : false;
+            bool isTabu = (inst->tenure > 0)
+                            ? ((inst->tabulist[i] != 0 && inst->iterations - inst->tabulist[i] <= inst->tenure) || 
+                            (inst->tabulist[j] != 0 && inst->iterations - inst->tabulist[j] <= inst->tenure))
+                            : false;
 
-            if (!isTabu && deltaCost < (minDeltaCost - EPSILON)) {
+            if (!isTabu && (!isDeltaSetted || deltaCost < (minDeltaCost - EPSILON))) {
                 minDeltaCost = deltaCost;
                 a = i;
                 b = j;
+                isDeltaSetted = true;
             }
         }
     }
+
+    if(inst->tenure > 0 && !isDeltaSetted) print_error_and_die("All moves are Tabu !");
 
     //NOTE: If we are in the Tabu search mode i have to update the solution with the bost possible move founded
     if (minDeltaCost < -EPSILON || inst->tenure > 0) {

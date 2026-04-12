@@ -162,7 +162,7 @@ short TSP_OPT(instance *inst) {
         break;
         case NN_AND_TABUSEARCH:
         case GRASP_AND_TABUSEARCH: {
-            inst->tenure = 50;
+            inst->tenure = 20;
             inst->VNS_kick_counter = 0;
         }
         break;
