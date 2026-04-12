@@ -3,37 +3,40 @@
 
 #include "utils.h"
 
+#include <cplex.h>
+
+
 enum TSP_SOLVING_STRATEGY {
     // only NN, tries all starting nodes until time or nodes run out
     NN,
-    
+
     // Executes an NN with a single starting node, executes a 2-opt until local optimum or end of time. At the end, if there are still nodes or time, restarts from the beginning with another starting node
     NN_TWO_OPT_MULTISTART,
-    
+
     // NN tries all starting nodes until time (construction) or nodes run out, then at the end ONE pass of 2-opt until local optimum or end of refinement time.
     NN_AND_TWO_OPT,
-    
+
     // NN tries all starting nodes until time (construction) or nodes run out, then at the end a loop of (2-opt -> NKick) until the end of time
     NN_AND_VNS,
-    
+
     NN_AND_TABUSEARCH,
-    
+
     // only GRASP, tries all starting nodes until time or nodes run out
     GRASP,
-    
+
     // Executes a GRASP with a single starting node, executes a 2-opt until local optimum or end of time. At the end, if there are still nodes or time, restarts from the beginning with another starting node
     GRASP_TWO_OPT_MULTISTART,
-    
+
     // NN tries all starting nodes until time (construction) or nodes run out, then at the end ONE pass of 2-opt until local optimum or end of refinement time.
     GRASP_AND_TWO_OPT,
-    
+
     // GRASP tries all starting nodes until time (construction) or nodes run out, then at the end a loop of (2-opt -> NKick) until the end of time
     GRASP_AND_VNS,
-    
+
     GRASP_AND_TABUSEARCH,
-    
+
     EXTRA_MILEAGE,
-    
+
     CPLEX
 };
 
@@ -46,7 +49,7 @@ enum TSP_REFINEMENT_STRATEGY {
 //region Plots
 /**
  * @brief Plots the solution using gnuplot
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param solution The solution array representing the tour.
  * @param only_instance Flag to plot only the instance nodes without the tour.
@@ -58,12 +61,13 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
 
 /**
  * @brief Checks if a solution represents a valid tour (Hamiltonian cycle).
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param solution The solution array to be checked.
  * @return short Returns 0 if the tour is valid, non-zero otherwise.
  */
 void update_instance_solution(instance *inst, unsigned int *new_sol, double new_cost, double new_time);
+
 short is_solution_valid(const instance *inst, const unsigned int *solution);
 
 /**
@@ -79,7 +83,7 @@ double calculate_solution_cost(const instance *inst, const unsigned int *sol);
 
 /**
  * @brief Sets the precalculated distance between two nodes in the distance matrix.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param i Index of the first node.
  * @param j Index of the second node.
@@ -90,7 +94,7 @@ short set_precalculated_distance(const instance *inst, unsigned int i, unsigned 
 
 /**
  * @brief Retrieves the precalculated distance between two nodes from the distance matrix.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param i Index of the first node.
  * @param j Index of the second node.
@@ -106,18 +110,19 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
 //region NN
 /**
  * @brief Executes the Nearest Neighbor (NN) heuristic to solve the TSP.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the heuristic to run.
  * @param refinement The refinement strategy to be applied after the heuristic.
  * @return short Returns 0 on success, non-zero if the time limit was exceeded.
  */
 short greedy_nn_heuristic(instance *inst, double time_limit, enum TSP_REFINEMENT_STRATEGY refinement);
+
 short extra_mileage_heuristic(instance *inst, double time_limit);
 
 /**
  * @brief Performs a single iteration of the Nearest Neighbor heuristic starting from a specific node.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param startingNode The index of the node to start the tour from. If -1, a random node is chosen.
  * @param GRASP_alpha The alpha parameter for the GRASP (Greedy Randomized Adaptive Search Procedure) heuristic. It controls the degree of randomization in the construction phase: 0 is purely greedy, 1 is purely random.
@@ -135,7 +140,7 @@ double greedy_nn_heuristic_iteration(const instance *inst, unsigned int starting
 //region Refinements
 /**
  * @brief Applies the 2-opt refinement strategy to an existing TSP solution.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the refinement.
  * @param sol Pointer to the solution array to be refined.
@@ -147,7 +152,7 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
 
 /**
  * @brief Applies the 3-opt kick by swapping 2 parts of the solution array
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the refinement.
  * @param sol Pointer to the solution array to be refined.
@@ -158,7 +163,7 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbe
 
 /**
  * @brief Performs a single iteration of the 2-opt refinement.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param sol Pointer to the solution array to be refined.
  * @return double The improvement (reduction in cost) achieved by the iteration.
@@ -166,6 +171,13 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *zbe
 double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol);
 
 //endregion Refinements
+
+
+int TSPopt(instance *inst);
+
+int xpos(int i, int j, instance *inst);
+
+void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) ;
 
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H

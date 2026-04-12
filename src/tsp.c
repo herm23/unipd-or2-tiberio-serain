@@ -279,8 +279,8 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                 twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
                 if (inst->verbosity >= DEBUG) {
                     printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
-                            temp_solution_cost,
-                            curr_time);
+                           temp_solution_cost,
+                           curr_time);
                 }
             }
             break;
@@ -299,8 +299,9 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                     printf("\nNew incumbent: cost = %.2lf, time = %.2lf\n", inst->zbest, inst->tbest);
                 }
             } else {
-                if (inst->verbosity >= SILENT) printf(
-                    "\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
+                if (inst->verbosity >= SILENT)
+                    printf(
+                        "\n ------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------");
             }
         }
 
@@ -325,7 +326,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
 
 /**
  * @brief Executes the Extra Mileage heuristic to solve the TSP.
- * 
+ *
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the heuristic to run.
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
@@ -465,7 +466,9 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
 
     double initial_cost = calculate_solution_cost(inst, sol);
     double curr_time = second() - inst->tstart;
-    if (inst->verbosity >= DEBUG) printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
+    if (inst->verbosity >= DEBUG)
+        printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost,
+               curr_time);
 
     while (1) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
@@ -476,44 +479,40 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         initial_cost += temp_solution_cost_delta;
 
         curr_time = second() - inst->tstart;
-        if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
-                                             curr_time);
+        if (inst->verbosity >= DEBUG)
+            printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
+                   curr_time);
 
         //NOTE: In this case always update the solution
-        if (temp_solution_cost_delta < -EPSILON)
-        {
+        if (temp_solution_cost_delta < -EPSILON) {
             *zbest += temp_solution_cost_delta;
             *tbest = curr_time;
             memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
         }
 
-        if(inst->VNS_kick_counter > 0) //VNS Implementation
+        if (inst->VNS_kick_counter > 0) //VNS Implementation
         {
             //NOTE: I'apply the VNS Kick only if we have reached the minimum
-            if (temp_solution_cost_delta > -EPSILON)
-            {
+            if (temp_solution_cost_delta > -EPSILON) {
                 // Vns kick
-                for (int i = 0; i < inst->VNS_kick_counter; i++)
-                {
+                for (int i = 0; i < inst->VNS_kick_counter; i++) {
                     //NOTE: If the time is finisched we break the cycle and the all refinement prob.
-                    if(vns_kick(inst, inst->timelimit, temp_solution, &initial_cost) == 1)
+                    if (vns_kick(inst, inst->timelimit, temp_solution, &initial_cost) == 1)
                         break;
 
                     // DEBUG
                     // plot_solution(inst, temp_solution, 0, 0);
 
-                    if (inst->verbosity >= DEBUG)
-                    {
+                    if (inst->verbosity >= DEBUG) {
                         printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
                     }
                 }
             }
-        }
-        else if (temp_solution_cost_delta > -EPSILON)  //Usual 2-opt
+        } else if (temp_solution_cost_delta > -EPSILON) //Usual 2-opt
         {
             free(temp_solution); //NOTE: Let's avoid memory leak
             return 0;
-        }    
+        }
 
         free(temp_solution);
 
@@ -564,7 +563,10 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
 
             double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
 
-            bool isTabu = inst->tenure > 0 ? ((inst->iterations - inst->tabulist[i] <= inst->tenure) || (inst->iterations - inst->tabulist[j] <= inst->tenure)) : false;
+            bool isTabu = inst->tenure > 0
+                              ? ((inst->iterations - inst->tabulist[i] <= inst->tenure) || (
+                                     inst->iterations - inst->tabulist[j] <= inst->tenure))
+                              : false;
 
             if (!isTabu && deltaCost < (minDeltaCost - EPSILON)) {
                 minDeltaCost = deltaCost;
@@ -575,14 +577,13 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
     }
 
     //NOTE: If we are in the Tabu search mode i have to update the solution with the bost possible move founded
-    if (minDeltaCost < -EPSILON || inst-> tenure > 0) {
+    if (minDeltaCost < -EPSILON || inst->tenure > 0) {
         //MOVE
         swap(&sol[a + 1], &sol[b], sizeof(int));
         reverse_subarray_circular(sol, nodes, a + 2, b);
 
         //Update tabu List
-        if(inst->tenure > 0)
-        {
+        if (inst->tenure > 0) {
             inst->tabulist[a] = inst->iterations;
             inst->tabulist[b] = inst->iterations;
         }
@@ -623,32 +624,28 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
     int tmp_index = 0;
 
     //NOTE: Copying the first part
-    for (int i = 0; i < min; i++) 
-    {
+    for (int i = 0; i < min; i++) {
         temp_solution[tmp_index++] = sol[i];
 
-        if(tmp_index > 1)
-        {
-            new_cost += get_precalculated_distance(inst, temp_solution[tmp_index-2], temp_solution[tmp_index-1]);
+        if (tmp_index > 1) {
+            new_cost += get_precalculated_distance(inst, temp_solution[tmp_index - 2], temp_solution[tmp_index - 1]);
         }
     }
 
     //NOTE: Copying the second part
-    for (int i = max; i < inst->nnodes; i++) 
-    {
+    for (int i = max; i < inst->nnodes; i++) {
         temp_solution[tmp_index++] = sol[i];
-        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index-2], temp_solution[tmp_index-1]);
+        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index - 2], temp_solution[tmp_index - 1]);
     }
 
     //NOTE: Copying the last part
-    for (int i = min; i < max; i++) 
-    {
+    for (int i = min; i < max; i++) {
         temp_solution[tmp_index++] = sol[i];
-        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index-2], temp_solution[tmp_index-1]);
+        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index - 2], temp_solution[tmp_index - 1]);
     }
 
     //Last arc
-    new_cost += get_precalculated_distance(inst, temp_solution[inst->nnodes-1], temp_solution[0]);
+    new_cost += get_precalculated_distance(inst, temp_solution[inst->nnodes - 1], temp_solution[0]);
 
     //NOTE: Adjusting costs and time
     *sol_cost = new_cost;
@@ -666,9 +663,116 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
 }
 
 
-short tabu_search_iteration(){
+short tabu_search_iteration() {
     //TODO: Perform 1 move of the tabu search
+}
 
+int TSPopt(instance *inst) {
+    int error = 0;
 
+    CPXENVptr env = CPXopenCPLEX(&error);
+    if (error || env == NULL) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
 
+    CPXLPptr lp = CPXcreateprob(env, &error, "TSP");
+    if (error || lp == NULL) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
+
+    build_model(inst, env, lp);
+
+    // Cplex's parameter setting TODO!
+
+    if (CPXmipopt(env, lp)) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
+    int ncols = CPXgetnumcols(env, lp);
+    double *xstar = (double *) calloc(ncols, sizeof(double));
+    if (CPXgetx(env, lp, xstar, 0, ncols - 1)) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
+    for (int i = 0; i < inst->nnodes; i++) {
+        for (int j = i + 1; j < inst->nnodes; j++) {
+            if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
+        }
+    }
+    free(xstar);
+
+    // free and close cplex model
+    CPXfreeprob(env, &lp);
+    CPXcloseCPLEX(&env);
+
+    return 0;
+}
+
+int xpos(int i, int j, instance *inst) {
+    if (i == j) print_error_and_die(" i == j in xpos");
+    if (i > j) return xpos(j, i, inst);
+    return index_upper(i, j, inst->nnodes);
+}
+
+void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) {
+    int izero = 0;
+    char binary = 'B';
+
+    char **cname = (char **) calloc(1, sizeof(char *));
+    cname[0] = (char *) calloc(100, sizeof(char));
+
+    // add binary var.s x(i,j) for i < j
+    for (int i = 0; i < inst->nnodes; i++) {
+        for (int j = i + 1; j < inst->nnodes; j++) {
+            sprintf(cname[0], "x(%d,%d)", i + 1, j + 1); // x(1,2), x(1,3) ....
+            double obj = get_precalculated_distance(inst, i, j);
+            double lb = 0.0;
+            double ub = 1.0;
+            int status = CPXnewcols(env, lp, 1, &obj, &lb, &ub, &binary, cname);
+            if (status) {
+                char errmsg[CPXMESSAGEBUFSIZE];
+                CPXgeterrorstring(env, status, errmsg);
+                print_error_and_die(errmsg);
+            }
+
+            if (CPXgetnumcols(env, lp) - 1 != xpos(i, j, inst)) print_error_and_die(" wrong position for x var.s");
+        }
+    }
+
+    int *index = (int *) malloc(inst->nnodes * sizeof(int));
+    double *value = (double *) malloc(inst->nnodes * sizeof(double));
+    for (int h = 0; h < inst->nnodes; h++) // degree constraints
+    {
+        double rhs = 2.0;
+        char sense = 'E'; // 'E' for equality constraint
+        sprintf(cname[0], "degree(%d)", h + 1);
+        int nnz = 0;
+        for (int i = 0; i < inst->nnodes; i++) {
+            if (i == h) continue;
+            index[nnz] = xpos(i, h, inst);
+            value[nnz] = 1.0;
+            nnz++;
+        }
+
+        int status = CPXaddrows(env, lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]);
+        if (status) {
+            char errmsg[CPXMESSAGEBUFSIZE];
+            CPXgeterrorstring(env, status, errmsg);
+            print_error_and_die(errmsg);
+        }
+    }
+
+    free(value);
+    free(index);
+
+    CPXwriteprob(env, lp, "model.lp", NULL);
+
+    free(cname[0]);
+    free(cname);
 }

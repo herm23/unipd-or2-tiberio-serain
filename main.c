@@ -4,7 +4,6 @@
 #include "./headers/chrono.h"
 #include <string.h>
 #include <stdlib.h>
-#include <cplex.h>
 
 
 short TSP_OPT(instance *inst);
@@ -136,7 +135,7 @@ short TSP_OPT(instance *inst) {
 
     enum TSP_SOLVING_STRATEGY strategy = inst->model_type;
     inst->iterations = 1;
-    inst->tabulist = (long long*)calloc(inst->nnodes, sizeof(long long));
+    inst->tabulist = (long long *) calloc(inst->nnodes, sizeof(long long));
 
     //NOTE: Managing hyperparameters without code duplication
     //Hard-code for now
@@ -205,6 +204,10 @@ short TSP_OPT(instance *inst) {
 
         case EXTRA_MILEAGE:
             extra_mileage_heuristic(inst, inst->timelimit);
+            break;
+
+        case CPLEX:
+            TSPopt(inst);
             break;
 
         default:
