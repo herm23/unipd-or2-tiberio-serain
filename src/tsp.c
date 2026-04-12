@@ -131,9 +131,14 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
  * @param solution The solution array to be checked.
  * @return short Returns 1 if the tour is valid, 0 otherwise.
  */
-short is_solution_valid(const instance *inst, const unsigned int *solution) {
+short is_solution_valid(const instance *inst, const unsigned int *solution, const double expected_cost) {
     //Return 0 if valid, -1 otherways
     if (inst == NULL || solution == NULL) return -1;
+
+    if (expected_cost != calculate_solution_cost(inst, solution)) {
+        printf("ERROR: Expected cost %lf, calculated cost %lf\n", expected_cost, calculate_solution_cost(inst, solution));
+        return 0;
+    }
 
     //NOTE: NO CHECKS ON INSTANCE OR SOLUTION VALIDITY (implicits on previous functions)
 
@@ -265,8 +270,6 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
         double temp_solution_cost = greedy_nn_heuristic_iteration(inst, nodes_order[i], inst->GRASP_alpha,
                                                                   temp_solution);
 
-
-
         double curr_time = second() - inst->tstart;
         if (inst->verbosity >= DEBUG) {
             printf("\t -> S-node %7d,  cost %10.2lf,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost, calculate_solution_cost(inst, temp_solution),
@@ -279,11 +282,11 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                 //2-opt
                 if (inst->verbosity >= DEBUG) printf("\n");
                 twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-                if (inst->verbosity >= DEBUG) {
+              //  if (inst->verbosity >= DEBUG) {
                     printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
                            temp_solution_cost,
                            curr_time);
-                }
+               // }
             }
             break;
 
@@ -293,7 +296,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
         }
 
         if (inst->zbest < 0 || temp_solution_cost < inst->zbest - EPSILON) {
-            if (is_solution_valid(inst, temp_solution)) {
+            if (is_solution_valid(inst, temp_solution, temp_solution_cost)) {
                 inst->zbest = temp_solution_cost;
                 inst->tbest = curr_time;
                 memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
@@ -478,9 +481,15 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost,
                curr_time);
 
+    int kick_performed = 0;
+    unsigned int *temp_solution;
+
     while (1) {
-        unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
-        memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+        if (kick_performed == 0) {
+            temp_solution = initialize_identity_solution(inst->nnodes);
+            memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+        }
+        kick_performed = 0;
         //NOTE: Tabu search is already implemented in this step due to parameter definition
         double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
         inst->iterations++; //NOTE: Update iterations after 2-opt !
@@ -501,10 +510,10 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         if (inst->VNS_kick_counter > 0) //VNS Implementation
         {
             //NOTE: I'apply the VNS Kick only if we have reached the minimum
-            if (temp_solution_cost_delta > -EPSILON) {
+            if (temp_solution_cost_delta >= -EPSILON) {
                 // Vns kick
                 for (int i = 0; i < inst->VNS_kick_counter; i++) {
-                    //NOTE: If the time is finisched we break the cycle and the all refinement prob.
+                    //NOTE: If the time is finished we break the cycle and the all refinement prob.
                     if (vns_kick(inst, inst->timelimit, temp_solution, &initial_cost) == 1)
                         break;
 
@@ -515,14 +524,17 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                         printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
                     }
                 }
+                kick_performed = 1;
             }
+
         } else if (temp_solution_cost_delta > -EPSILON) //Usual 2-opt
         {
             free(temp_solution); //NOTE: Let's avoid memory leak
             return 0;
         }
 
-        free(temp_solution);
+        if (kick_performed == 0)
+            free(temp_solution);
 
         //NOTE: Check the time limit
         if (time_limit != 0 && curr_time > time_limit) {

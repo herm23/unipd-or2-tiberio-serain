@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
 
     TSP_OPT(&inst);
 
-    short check_solution = is_solution_valid(&inst, inst.solution);
+    short check_solution = is_solution_valid(&inst, inst.solution, inst.zbest);
     if (!check_solution) {
         free_instance(&inst);
         print_error_and_die("Solution found is NOT VALID!");
@@ -83,12 +83,12 @@ int main(int argc, char **argv) {
 
 void update_instance_solution(instance *inst, unsigned int *new_sol, double new_cost, double new_time) {
     if (inst->zbest < 0 || new_cost < inst->zbest - EPSILON) {
-        if (is_solution_valid(inst, new_sol)) {
+        if (is_solution_valid(inst, new_sol, new_cost)) {
             inst->zbest = new_cost;
             inst->tbest = new_time;
             memcpy(inst->solution, new_sol, sizeof(unsigned int) * inst->nnodes);
         } else {
-            if (inst->verbosity >= SILENT) printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
+            if (inst->verbosity >= SILENT) printf("x------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
         }
     }
 }
@@ -194,7 +194,7 @@ short TSP_OPT(instance *inst) {
 
             temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
 
-            twoOpt_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost,
+            twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost,
                               &curr_time);
 
             update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);

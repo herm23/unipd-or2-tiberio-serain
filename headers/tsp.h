@@ -68,7 +68,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
  */
 void update_instance_solution(instance *inst, unsigned int *new_sol, double new_cost, double new_time);
 
-short is_solution_valid(const instance *inst, const unsigned int *solution);
+short is_solution_valid(const instance *inst, const unsigned int *solution, double expected_cost);
 
 /**
  * @brief Calculates the total cost of a given solution.
