@@ -118,7 +118,6 @@ double get_precalculated_distance(const instance *inst, unsigned int i, unsigned
  */
 short greedy_nn_heuristic(instance *inst, double time_limit, enum TSP_REFINEMENT_STRATEGY refinement);
 
-short extra_mileage_heuristic(instance *inst, double time_limit);
 
 /**
  * @brief Performs a single iteration of the Nearest Neighbor heuristic starting from a specific node.
@@ -133,6 +132,10 @@ double greedy_nn_heuristic_iteration(const instance *inst, unsigned int starting
                                      unsigned int *sol);
 
 //endregion NN
+
+
+short extra_mileage_heuristic(instance *inst);
+
 
 //endregion Heuristics
 

@@ -203,7 +203,7 @@ short TSP_OPT(instance *inst) {
         break;
 
         case EXTRA_MILEAGE:
-            extra_mileage_heuristic(inst, inst->timelimit);
+            extra_mileage_heuristic(inst);
             break;
 
         case CPLEX:

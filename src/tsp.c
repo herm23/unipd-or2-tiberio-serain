@@ -331,19 +331,32 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
  * @param time_limit The maximum time allowed for the heuristic to run.
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
-short extra_mileage_heuristic(instance *inst, double time_limit) {
+short extra_mileage_heuristic(instance *inst) {
     if (inst->verbosity >= DEBUG) printf("\t## START extra_mileage_heuristic\n");
 
     const int N = inst->nnodes;
     unsigned int *sol = malloc(N * sizeof(unsigned int));
     unsigned char *visited = calloc(N, sizeof(unsigned char));
 
-    // 1. Initial sub-tour: start with two nodes (0 and 1 for simplicity)
-    // A better choice could be the two farthest nodes
-    sol[0] = 0;
-    sol[1] = 1;
-    visited[0] = 1;
-    visited[1] = 1;
+    // 1. Initial sub-tour: start with the two most distant nodes
+    unsigned int node1 = 0, node2 = 1;
+    double max_distance = get_precalculated_distance(inst, 0, 1);
+
+    for (int i = 0; i < N; i++) {
+        for (int j = i + 1; j < N; j++) {
+            double dist = get_precalculated_distance(inst, i, j);
+            if (dist > max_distance) {
+                max_distance = dist;
+                node1 = i;
+                node2 = j;
+            }
+        }
+    }
+
+    sol[0] = node1;
+    sol[1] = node2;
+    visited[node1] = 1;
+    visited[node2] = 1;
 
     int current_nodes_in_tour = 2;
 
@@ -364,7 +377,6 @@ short extra_mileage_heuristic(instance *inst, double time_limit) {
 
                 double delta = d_ik + d_kj - d_ij;
 
-                //NOTE: Here we are looking for the minimun delta and the related node
                 if (min_extra_mileage < 0 || delta < min_extra_mileage - EPSILON) {
                     min_extra_mileage = delta;
                     best_node = k;
@@ -373,22 +385,12 @@ short extra_mileage_heuristic(instance *inst, double time_limit) {
             }
         }
 
-        // Insert best_node at best_pos (shifting all nodes in the sol array)
-        //NOTE: This is a forward shift to create space into the array to add the best node
-        //NOTE: The last iteration moves the node into the "best_pos", so it creates the wanted space
         for (int i = current_nodes_in_tour; i > best_pos; i--) {
             sol[i] = sol[i - 1];
         }
         sol[best_pos] = best_node;
         visited[best_node] = 1;
         current_nodes_in_tour++;
-
-        double curr_time = second() - inst->tstart;
-        if (curr_time > time_limit) {
-            free(sol);
-            free(visited);
-            return 1;
-        }
     }
 
     double final_cost = calculate_solution_cost(inst, sol);
