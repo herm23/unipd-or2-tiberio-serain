@@ -122,6 +122,16 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
     }
 }
 
+
+void plot_iteration(instance *inst, double curr_cost, double curr_opt_cost, char *section) {
+    if (inst->cost_plot == NULL) {
+        inst->cost_plot = fopen("cost.csv", "w");
+    }
+
+    fprintf(inst->cost_plot, "%lf,%lf,%s\n", curr_cost, curr_opt_cost, section);
+    fflush(inst->cost_plot);
+}
+
 //endregion Plots
 
 /**
@@ -136,7 +146,8 @@ short is_solution_valid(const instance *inst, const unsigned int *solution, cons
     if (inst == NULL || solution == NULL) return -1;
 
     if (expected_cost != calculate_solution_cost(inst, solution)) {
-        printf("ERROR: Expected cost %lf, calculated cost %lf\n", expected_cost, calculate_solution_cost(inst, solution));
+        printf("ERROR: Expected cost %lf, calculated cost %lf\n", expected_cost,
+               calculate_solution_cost(inst, solution));
         return 0;
     }
 
@@ -176,7 +187,7 @@ double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
     int N = inst->nnodes;
 
     for (int i = 0; i < N - 1; i++)
-        cost += get_precalculated_distance(inst,sol[i], sol[i + 1]);
+        cost += get_precalculated_distance(inst, sol[i], sol[i + 1]);
 
     cost += get_precalculated_distance(inst, sol[N - 1], sol[0]);
     return cost;
@@ -272,9 +283,12 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
 
         double curr_time = second() - inst->tstart;
         if (inst->verbosity >= DEBUG) {
-            printf("\t -> S-node %7d,  cost %10.2lf,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost, calculate_solution_cost(inst, temp_solution),
+            printf("\t -> S-node %7d,  cost %10.2lf,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost,
+                   calculate_solution_cost(inst, temp_solution),
                    curr_time);
         }
+
+        plot_iteration(inst, temp_solution_cost, inst->zbest, "nn");
 
         switch (refinement) {
             case TWO_OPT: {
@@ -282,11 +296,11 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                 //2-opt
                 if (inst->verbosity >= DEBUG) printf("\n");
                 twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
-              //  if (inst->verbosity >= DEBUG) {
-                    printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
-                           temp_solution_cost,
-                           curr_time);
-               // }
+                //  if (inst->verbosity >= DEBUG) {
+                printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
+                       temp_solution_cost,
+                       curr_time);
+                // }
             }
             break;
 
@@ -301,7 +315,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                 inst->tbest = curr_time;
                 memcpy(inst->solution, temp_solution, sizeof(unsigned int) * inst->nnodes);
                 if (inst->verbosity >= INFO) {
-                    printf("\nNew incumbent: cost = %.2lf, time = %.2lf\n", inst->zbest, inst->tbest);
+                    printf("\n[NN] - New incumbent: cost = %.2lf, time = %.2lf\n", inst->zbest, inst->tbest);
                 }
             } else {
                 if (inst->verbosity >= SILENT)
@@ -475,79 +489,72 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
 
     short exitStatus = 0;
 
-    double initial_cost = calculate_solution_cost(inst, sol);
+    double initial_cost = *zbest;
     double curr_time = second() - inst->tstart;
+
     if (inst->verbosity >= DEBUG)
-        printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost,
+        printf("\t\t -> 2-opt INIT with cost  %20lf at time %20lf\n", initial_cost,
                curr_time);
 
-    int kick_performed = 0;
-    unsigned int *temp_solution;
+    unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
+    memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+
+    plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
+
 
     while (1) {
-        if (kick_performed == 0) {
-            temp_solution = initialize_identity_solution(inst->nnodes);
-            memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
-        }
-        kick_performed = 0;
         //NOTE: Tabu search is already implemented in this step due to parameter definition
         double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
         inst->iterations++; //NOTE: Update iterations after 2-opt !
         initial_cost += temp_solution_cost_delta;
-
         curr_time = second() - inst->tstart;
         if (inst->verbosity >= DEBUG)
             printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
                    curr_time);
 
-        //NOTE: In this case always update the solution
-        if (temp_solution_cost_delta < -EPSILON) {
-            *zbest += temp_solution_cost_delta;
+
+        // plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
+
+        if (initial_cost < *zbest - EPSILON) {
+            *zbest = initial_cost;
+            //TODO ora che hai il vns non puoi andare sempre in delta, ma devi restare allineato al 2opt
             *tbest = curr_time;
             memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
-        }
-
-        if (inst->VNS_kick_counter > 0) //VNS Implementation
-        {
-            //NOTE: I'apply the VNS Kick only if we have reached the minimum
-            if (temp_solution_cost_delta >= -EPSILON) {
-                // Vns kick
-                for (int i = 0; i < inst->VNS_kick_counter; i++) {
-                    //NOTE: If the time is finished we break the cycle and the all refinement prob.
-                    if (vns_kick(inst, inst->timelimit, temp_solution, &initial_cost) == 1)
-                        break;
-
-                    // DEBUG
-                    // plot_solution(inst, temp_solution, 0, 0);
-
-                    if (inst->verbosity >= DEBUG) {
-                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
-                    }
-                }
-                kick_performed = 1;
+            if (inst->verbosity >= INFO) {
+                printf("\n[2opt] - New local incumbent: cost = %.2lf, time = %.2lf\n", initial_cost, curr_time);
             }
+        }
+        plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
 
-        } else if (temp_solution_cost_delta > -EPSILON) //Usual 2-opt
-        {
-            free(temp_solution); //NOTE: Let's avoid memory leak
-            return 0;
+
+        if (temp_solution_cost_delta >= -EPSILON) {
+            if (inst->VNS_kick_counter == 0)
+                break;
+            // Vns kick
+            for (int i = 0; i < inst->VNS_kick_counter; i++) {
+                //NOTE: If the time is finished we break the cycle and the all refinement prob.
+                int kick_status = vns_kick(inst, inst->timelimit, temp_solution, &initial_cost);
+
+                plot_iteration(inst, initial_cost, *zbest, "kick");
+
+                if (kick_status == 1)
+                    break;
+
+                if (inst->verbosity >= DEBUG) {
+                    printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
+                }
+            }
         }
 
-        if (kick_performed == 0)
-            free(temp_solution);
 
         //NOTE: Check the time limit
         if (time_limit != 0 && curr_time > time_limit) {
             exitStatus = 1;
+            free(temp_solution);
             break;
         }
 
         plot_solution(inst, sol, 0, 0);
-        // #ifdef _WIN32
-        //         Sleep(100);
-        // #else
-        //         sleep(0.1);
-        // #endif
     }
     return exitStatus;
 }
@@ -630,7 +637,8 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
     int p2 = -1;
 
     //NOTE: I'd like p1 p2 further one from another
-    while (!(p1 != p2 && abs(p1 - p2) > (inst->nnodes * 0.25))) {
+    while (!(p1 != p2 && abs(p1 - p2) > (inst->nnodes * 0.25)) || (p1 == 0 || p2 == 0)) {
+        //TODO FIX!
         p1 = (int) (rand_0_1() * inst->nnodes);
         p2 = (int) (rand_0_1() * inst->nnodes);
     }

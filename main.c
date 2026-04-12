@@ -192,13 +192,13 @@ short TSP_OPT(instance *inst) {
             double ratio = (strategy == GRASP_AND_TWO_OPT) ? 0.2 : 1.0;
             greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
 
-            temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
+            // temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
 
-            twoOpt_refinement(inst, inst->timelimit, temp_solution, &temp_solution_cost,
+            twoOpt_refinement(inst, inst->timelimit, inst->solution, &inst->zbest,
                               &curr_time);
 
-            update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
-            free(temp_solution);
+            // update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+            // free(temp_solution);
         }
         break;
 

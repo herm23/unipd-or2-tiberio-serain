@@ -56,6 +56,7 @@ enum TSP_REFINEMENT_STRATEGY {
  */
 void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause);
 
+void plot_iteration(instance *inst, double curr_cost, double curr_opt_cost, char * section);
 
 //endregion Plots
 

@@ -156,6 +156,9 @@ void free_instance(instance *inst) {
     free(inst->tabulist);
     if (inst->plot)
         pclose(inst->plot);
+
+    if (inst->cost_plot)
+        fclose(inst->cost_plot);
 }
 
 //endregion MEMORY MANAGEMENT
@@ -398,6 +401,7 @@ void parse_tsp_file(instance *inst) {
 
     inst->nnodes = -1;
     inst->plot = NULL;
+    inst->cost_plot = NULL;
 
     char line[180];
     char *par_name;
@@ -540,6 +544,7 @@ void generate_random_instance(instance *inst) {
         printf(" ... generated random instance with %d nodes and seed %u\n", inst->nnodes, inst->randomseed);
     }
     inst->plot = NULL;
+    inst->cost_plot = NULL;
 }
 
 /**
