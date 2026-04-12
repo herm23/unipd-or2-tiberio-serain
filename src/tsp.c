@@ -465,11 +465,16 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
 
     double initial_cost = calculate_solution_cost(inst, sol);
     double curr_time = second() - inst->tstart;
+
     if (inst->verbosity >= DEBUG) printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
 
     while (1) {
         unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
         memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
+
+        //NOTE: Print the starting cost (it's redundant for debug)
+        if (inst->verbosity >= DEBUG) printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
+
         //NOTE: Tabu search is already implemented in this step due to parameter definition
         double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
         inst->iterations++; //NOTE: Update iterations after 2-opt !
@@ -479,8 +484,8 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         if (inst->verbosity >= DEBUG) printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
                                              curr_time);
 
-        //NOTE: In this case always update the solution
-        if (temp_solution_cost_delta < -EPSILON)
+        //NOTE: Update the cost only if it is the best
+        if (initial_cost < (*zbest - EPSILON))
         {
             *zbest += temp_solution_cost_delta;
             *tbest = curr_time;
@@ -490,7 +495,7 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         if(inst->VNS_kick_counter > 0) //VNS Implementation
         {
             //NOTE: I'apply the VNS Kick only if we have reached the minimum
-            if (temp_solution_cost_delta > -EPSILON)
+            if (initial_cost > (*zbest - EPSILON))
             {
                 // Vns kick
                 for (int i = 0; i < inst->VNS_kick_counter; i++)
@@ -499,17 +504,17 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                     if(vns_kick(inst, inst->timelimit, temp_solution, &initial_cost) == 1)
                         break;
 
-                    // DEBUG
-                    // plot_solution(inst, temp_solution, 0, 0);
+                    // DEBUG (Decomment if you'd like to check each kick effect)
+                    // plot_solution(inst, sol, 0, 0);
 
                     if (inst->verbosity >= DEBUG)
                     {
-                        printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
+                        printf("\t -> VNS kick made with new cost %10.2lf at time %8.4lf \n", initial_cost, curr_time);
                     }
                 }
             }
         }
-        else if (temp_solution_cost_delta > -EPSILON)  //Usual 2-opt
+        else if (initial_cost > (*zbest - EPSILON))  //Usual 2-opt
         {
             free(temp_solution); //NOTE: Let's avoid memory leak
             return 0;

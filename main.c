@@ -190,16 +190,13 @@ short TSP_OPT(instance *inst) {
         case GRASP_AND_VNS:
         case NN_AND_TABUSEARCH:
         case GRASP_AND_TABUSEARCH: {
-            double ratio = (strategy == GRASP_AND_TWO_OPT) ? 0.2 : 1.0;
+            double ratio = 0.2;
             greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
 
-            temp_solution = prepare_temp_solution(inst, &temp_solution_cost, &curr_time);
+            twoOpt_refinement(inst, inst->timelimit, inst->solution, &inst->zbest, &inst->tbest);
 
-            twoOpt_refinement(inst, inst->timelimit * (1.0 - ratio + 0.1), temp_solution, &temp_solution_cost,
-                              &curr_time);
-
-            update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
-            free(temp_solution);
+            // update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
+            // free(temp_solution);
         }
         break;
 
