@@ -545,6 +545,17 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                 //NOTE: If the time is finished we break the cycle and the all refinement prob.
                 int kick_status = vns_kick(inst, inst->timelimit, temp_solution, &initial_cost);
 
+                //Debug
+                // if (is_solution_valid(inst, temp_solution, initial_cost)) {
+                //     if (inst->verbosity >= DEBUG) {
+                //         printf("[VALIDATION] Success: Tour is a valid Hamiltonian cycle. Cost: %lf\n", initial_cost);
+                //         plot_solution(inst, temp_solution, 0, 0);
+                //     }
+                // } else {
+                //     // Questo è il print più importante in fase di sviluppo
+                //     printf("[VALIDATION] ERROR: Invalid tour detected! (Check for duplicates or missing nodes)\n");
+                // }
+
                 plot_iteration(inst, initial_cost, *zbest, "kick");
 
                 if (kick_status == 1)
@@ -554,9 +565,6 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                     printf("\t -> AFTER VNS Kick %10.2lf, time %8.4lf \n", initial_cost, curr_time);
                 }
             }
-
-            //Debug
-            // plot_solution(inst, temp_solution, 0, 0);
         }
 
 
@@ -645,58 +653,63 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
 short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol_cost) {
     short exitStatus = 0;
 
-    //NOTE: Generating random pointers
-    int p1 = -1;
-    int p2 = -1;
+    //NOTE: Selecting 3 different point cuts
+    int cuts[3];
+    cuts[0] = rand() % inst->nnodes;
 
-    //NOTE: I'd like p1 p2 further one from another
-    while (!(p1 != p2 && abs(p1 - p2) > (inst->nnodes * 0.25)) || (p1 == 0 || p2 == 0)) {
-        //TODO FIX!
-        p1 = (int) (rand_0_1() * inst->nnodes);
-        p2 = (int) (rand_0_1() * inst->nnodes);
-    }
+    //NOTE: Avoiding of having equal cuts
+    do {
+        cuts[1] = rand() % inst->nnodes;
+    } while (cuts[1] == cuts[0]);
 
-    int min = p1 < p2 ? p1 : p2;
-    int max = p1 > p2 ? p1 : p2;
+    do {
+        cuts[2] = rand() % inst->nnodes;
+    } while (cuts[2] == cuts[0] || cuts[2] == cuts[1]);
 
-    //NOTE: Tmp array
-    unsigned int *temp_solution = malloc(inst->nnodes * sizeof(unsigned int));
-    double new_cost = 0; // Usato double per precisione con i costi reali
-    int tmp_index = 0;
-
-    //NOTE: Copying the first part
-    for (int i = 0; i < min; i++) {
-        temp_solution[tmp_index++] = sol[i];
-
-        if (tmp_index > 1) {
-            new_cost += get_precalculated_distance(inst, temp_solution[tmp_index - 2], temp_solution[tmp_index - 1]);
+    //Bubble sort
+    for (int i = 0; i < 2; i++) {
+        for (int j = i + 1; j < 3; j++) {
+            if (cuts[i] > cuts[j]) {
+                int tmp = cuts[i];
+                cuts[i] = cuts[j];
+                cuts[j] = tmp;
+            }
         }
     }
 
-    //NOTE: Copying the second part
-    for (int i = max; i < inst->nnodes; i++) {
-        temp_solution[tmp_index++] = sol[i];
-        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index - 2], temp_solution[tmp_index - 1]);
-    }
+    int i = cuts[0];
+    int j = cuts[1];
+    int k = cuts[2];
 
-    //NOTE: Copying the last part
-    for (int i = min; i < max; i++) {
-        temp_solution[tmp_index++] = sol[i];
-        new_cost += get_precalculated_distance(inst, temp_solution[tmp_index - 2], temp_solution[tmp_index - 1]);
-    }
+    /* Original tour divided in:
+       A: [0 ... i]
+       B: [i+1 ... j]
+       C: [j+1 ... k]
+       D: [k+1 ... n-1]
+       
+       Una classica 3-opt kick (Double Bridge) riassembla come: A -> D -> C -> B
+    */
 
-    //Last arc
-    new_cost += get_precalculated_distance(inst, temp_solution[inst->nnodes - 1], temp_solution[0]);
+    unsigned int *temp_solution = (unsigned int *)malloc(inst->nnodes * sizeof(unsigned int));
+    int pos = 0;
 
-    //NOTE: Adjusting costs and time
-    *sol_cost = new_cost;
+    // Segment A
+    for (int idx = 0; idx <= i; idx++) temp_solution[pos++] = sol[idx];
+    // Segment D
+    for (int idx = k + 1; idx < inst->nnodes; idx++) temp_solution[pos++] = sol[idx];
+    // Segment C
+    for (int idx = j + 1; idx <= k; idx++) temp_solution[pos++] = sol[idx];
+    // Segment B
+    for (int idx = i + 1; idx <= j; idx++) temp_solution[pos++] = sol[idx];
 
-    double curr_time = second() - inst->tstart;
+    //WARNING: This operation can be optimized
+    *sol_cost = calculate_solution_cost(inst, temp_solution);
 
-    memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
+    memcpy(sol, temp_solution, inst->nnodes * sizeof(unsigned int));
     free(temp_solution);
 
-    if (time_limit != 0 && curr_time > time_limit) {
+    double curr_time = second() - inst->tstart;
+    if (time_limit > 0 && curr_time > time_limit) {
         exitStatus = 1;
     }
 
