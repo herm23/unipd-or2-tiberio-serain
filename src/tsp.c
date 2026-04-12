@@ -171,9 +171,9 @@ double calculate_solution_cost(const instance *inst, const unsigned int *sol) {
     int N = inst->nnodes;
 
     for (int i = 0; i < N - 1; i++)
-        cost += calculate_distance(sol[i], sol[i + 1], inst);
+        cost += get_precalculated_distance(inst,sol[i], sol[i + 1]);
 
-    cost += calculate_distance(sol[N - 1], sol[0], inst);
+    cost += get_precalculated_distance(inst, sol[N - 1], sol[0]);
     return cost;
 }
 
@@ -265,9 +265,11 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
         double temp_solution_cost = greedy_nn_heuristic_iteration(inst, nodes_order[i], inst->GRASP_alpha,
                                                                   temp_solution);
 
+
+
         double curr_time = second() - inst->tstart;
         if (inst->verbosity >= DEBUG) {
-            printf("\t -> S-node %7d,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost,
+            printf("\t -> S-node %7d,  cost %10.2lf,  cost %10.2lf, time %8.2lf", nodes_order[i], temp_solution_cost, calculate_solution_cost(inst, temp_solution),
                    curr_time);
         }
 
@@ -426,26 +428,30 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
     unsigned int pointIndex = -1;
 
     double currSol = 0;
+    double realDist = 0;
 
     //NOTE: The last 2 are already positioned
     for (unsigned int i = 0; i < nodes - 2; i++) {
         for (unsigned int j = i + 1; j < nodes; j++) {
             double tmpDist = get_precalculated_distance(inst, sol[i], sol[j]); // memoized
+            double lrealDist = tmpDist;
 
             //GRASP HERE!
             tmpDist *= 1 + GRASP_alpha * rand_0_1();
 
             if (minDist < 0 || tmpDist < minDist - EPSILON) {
                 minDist = tmpDist;
+                realDist = lrealDist;
                 pointIndex = j;
             }
         }
-        currSol += minDist;
+        currSol += realDist;
         swap(&sol[i + 1], &sol[pointIndex], sizeof(int));
         minDist = -1.0;
         pointIndex = -1;
     }
 
+    currSol += get_precalculated_distance(inst, sol[nodes - 2], sol[nodes - 1]);
     currSol += get_precalculated_distance(inst, sol[nodes - 1], sol[0]);
     return currSol;
 }
