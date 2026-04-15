@@ -56,7 +56,7 @@ enum TSP_REFINEMENT_STRATEGY {
  */
 void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause);
 
-void plot_iteration(instance *inst, double curr_cost, double curr_opt_cost, char * section);
+void plot_iteration(instance *inst, double curr_cost, double curr_opt_cost, char *section);
 
 //endregion Plots
 
@@ -181,7 +181,7 @@ int TSPopt(instance *inst);
 
 int xpos(int i, int j, instance *inst);
 
-void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) ;
+void build_model(instance *inst, CPXENVptr env, CPXLPptr lp);
 
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H

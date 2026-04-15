@@ -7,9 +7,11 @@ from dataclasses import dataclass
 # CONFIGURATION
 # =========================
 
-N_RUNS = 5
-EXECUTABLE_PATH = r"C:\Users\filip\CLionProjects\unipd-or2-tiberio-serain\cmake-build-debug---vsc\unipd_or2_tiberio_serain.exe"  # <-- change this
+N_RUNS = 20
+EXECUTABLE_PATH = r"C:\Users\filip\CLionProjects\unipd-or2-tiberio-serain\cmake-build-debug---vsc\unipd_or2_tiberio_serain.exe"
 OUTPUT_ROOT = "runs"
+
+NODE_SIZES = [50, 100, 300, 1000]
 
 # =========================
 # MODEL CLASS
@@ -19,52 +21,33 @@ OUTPUT_ROOT = "runs"
 @dataclass
 class Model:
     name: str
-    file: str
     time_limit: float
     model_type: int
-    nodes_count: int = None
+    nodes_count: int
+    verbosity: int = 0
     no_plot: bool = True
 
     def build_command(self, seed: int, output_file: str):
         cmd = [
             EXECUTABLE_PATH,
-            "-f" if self.file else "",
-            self.file if self.file else "",
-            "--out",
-            output_file,
-            "--time_limit",
-            str(self.time_limit),
-            "-model",
-            str(self.model_type),
             "-seed",
             str(seed),
+            "-nodes_count",
+            str(self.nodes_count),
+            "-time_limit",
+            str(self.time_limit),
+            "-v",
+            str(self.verbosity),
+            "-model_type",
+            str(self.model_type),
+            "--out",
+            output_file,
         ]
-
-        if self.nodes_count is not None:
-            cmd += ["-nodes_count", str(self.nodes_count)]
 
         if self.no_plot:
             cmd.append("--no-plot")
 
         return cmd
-
-
-# =========================
-# DEFINE MODELS
-# =========================
-
-MODELS = [
-    Model(
-        name="model_A",
-        time_limit=60,
-        model_type=0,
-    ),
-    Model(
-        name="model_B",
-        time_limit=60,
-        model_type=1,
-    ),
-]
 
 
 # =========================
@@ -75,26 +58,41 @@ MODELS = [
 def main():
     os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
-    for run_idx in range(N_RUNS):
-        seed = random.randint(0, 10**9)
+    for nodes in NODE_SIZES:
+        print(f"\n===== NODES: {nodes} =====")
 
-        run_folder = os.path.join(OUTPUT_ROOT, f"run_{seed}")
-        os.makedirs(run_folder, exist_ok=True)
+        # definisci i modelli per questo numero di nodi
+        models = [
+            Model(name="NN_2OPT_MS", time_limit=60, model_type=1, nodes_count=nodes),
+            Model(name="NN_VNS", time_limit=60, model_type=3, nodes_count=nodes),
+            Model(name="NN_TABU", time_limit=60, model_type=4, nodes_count=nodes),
+        ]
 
-        print(f"\n=== RUN {run_idx+1}/{N_RUNS} | seed={seed} ===")
+        for run_idx in range(N_RUNS):
+            seed = random.randint(0, 10**9)
 
-        for model in MODELS:
-            output_file = os.path.join(run_folder, f"{model.name}.txt")
+            print(f"\n--- RUN {run_idx+1}/{N_RUNS} | seed={seed} ---")
 
-            cmd = model.build_command(seed, output_file)
+            for model in models:
+                # struttura cartelle: nodes/model/seed/
+                output_dir = os.path.join(
+                    OUTPUT_ROOT, str(nodes), model.name, f"seed_{seed}"
+                )
+                os.makedirs(output_dir, exist_ok=True)
 
-            print(f"Running {model.name}...")
-            print(" ".join(cmd))
+                # filename = serializzazione parametri
+                filename = f"nodes{nodes}_model{model.model_type}_seed{seed}_tl{model.time_limit}.txt"
+                output_file = os.path.join(output_dir, filename)
 
-            try:
-                subprocess.run(cmd, check=True)
-            except subprocess.CalledProcessError as e:
-                print(f"Error running {model.name}: {e}")
+                cmd = model.build_command(seed, output_file)
+
+                print(f"Running {model.name}...")
+                print(" ".join(cmd))
+
+                try:
+                    subprocess.run(cmd, check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Error running {model.name}: {e}")
 
 
 if __name__ == "__main__":

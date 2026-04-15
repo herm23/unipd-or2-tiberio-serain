@@ -124,6 +124,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
 
 
 void plot_iteration(instance *inst, double curr_cost, double curr_opt_cost, char *section) {
+    return;
     if (inst->cost_plot == NULL) {
         inst->cost_plot = fopen("cost.csv", "w");
     }
@@ -175,16 +176,19 @@ short is_solution_valid(const instance *inst, const unsigned int *solution, cons
     return 1;
 }
 
-short log_and_check_sol(const instance *inst, const unsigned int *solution, const double expected_cost){
-    if (is_solution_valid(inst, solution, expected_cost)) {
+short log_and_check_sol(const instance *inst, const unsigned int *solution, const double expected_cost) {
+    const short valid = is_solution_valid(inst, solution, expected_cost);
+    if (valid) {
         if (inst->verbosity >= DEBUG) {
             printf("[VALIDATION] Success: Tour is a valid Hamiltonian cycle. Cost: %lf\n", expected_cost);
-            plot_solution(inst, solution, 0, 0);
+            // plot_solution(inst, solution, 0, 0);
         }
     } else {
         // Questo è il print più importante in fase di sviluppo
         printf("[VALIDATION] ERROR: Invalid tour detected! (Check for duplicates or missing nodes)\n");
     }
+
+    return valid;
 }
 
 /**
@@ -307,7 +311,11 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                 //NOTE: Performing vns kicks
                 //2-opt
                 if (inst->verbosity >= DEBUG) printf("\n");
-                twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                short res = twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                if (res == -1) {
+                    exitStatus = -1;
+                    break;
+                }
                 //  if (inst->verbosity >= DEBUG) {
                 printf("\t -> AFTER twoOpt_refinement cost %10.2lf, time %8.2lf",
                        temp_solution_cost,
@@ -520,7 +528,9 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         // memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
 
         //NOTE: Print the starting cost (it's redundant for debug)
-        if (inst->verbosity >= DEBUG) printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
+        if (inst->verbosity >= DEBUG)
+            printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost,
+                   curr_time);
 
         //NOTE: Tabu search is already implemented in this step due to parameter definition
         double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
@@ -538,20 +548,27 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
         // plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
 
         if (initial_cost < *zbest - EPSILON) {
-            *zbest = initial_cost;
-            //TODO ora che hai il vns non puoi andare sempre in delta, ma devi restare allineato al 2opt (Apposto ??)
-            *tbest = curr_time;
-            memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
-            if (inst->verbosity >= INFO) {
-                printf("\n[2opt] - New local incumbent: cost = %.2lf, time = %.2lf\n", initial_cost, curr_time);
+            if (is_solution_valid(inst, temp_solution, initial_cost)) {
+                *zbest = initial_cost;
+                *tbest = curr_time;
+                memcpy(sol, temp_solution, sizeof(unsigned int) * inst->nnodes);
+                if (inst->verbosity >= INFO) {
+                    printf("\n[2opt] - New local incumbent: cost = %.2lf, time = %.2lf\n", initial_cost, curr_time);
+                }
+            } else {
+                if (inst->verbosity >= SILENT) {
+                    printf(
+                        "------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
+                    return -1;
+                }
             }
         }
+
         plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
 
         //NOTE: If i'm in a local minima and NOT in tabu
         if (temp_solution_cost_delta >= -EPSILON && inst->tenure == 0) {
-            if (inst->VNS_kick_counter == 0)
-            {
+            if (inst->VNS_kick_counter == 0) {
                 free(temp_solution);
                 break;
             }
@@ -561,7 +578,7 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                 int kick_status = vns_kick(inst, inst->timelimit, temp_solution, &initial_cost);
 
                 //Debug
-                //log_and_check_sol(inst, temp_solution, initial_cost);
+                // log_and_check_sol(inst, temp_solution, initial_cost);
 
                 plot_iteration(inst, initial_cost, *zbest, "kick");
 
@@ -582,7 +599,7 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
             break;
         }
 
-        plot_solution(inst, sol, 0, 0);
+        plot_solution(inst, temp_solution, 0, 0);
     }
     return exitStatus;
 }
@@ -620,9 +637,9 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
             double deltaCost = (ab + aprimebprime) - (aaprime + bbprime);
 
             bool isTabu = (inst->tenure > 0)
-                            ? ((inst->tabulist[i] != 0 && inst->iterations - inst->tabulist[i] <= inst->tenure) || 
-                            (inst->tabulist[j] != 0 && inst->iterations - inst->tabulist[j] <= inst->tenure))
-                            : false;
+                              ? ((inst->tabulist[i] != 0 && inst->iterations - inst->tabulist[i] <= inst->tenure) ||
+                                 (inst->tabulist[j] != 0 && inst->iterations - inst->tabulist[j] <= inst->tenure))
+                              : false;
 
             if (!isTabu && (!isDeltaSetted || deltaCost < (minDeltaCost - EPSILON))) {
                 minDeltaCost = deltaCost;
@@ -633,7 +650,7 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
         }
     }
 
-    if(inst->tenure > 0 && !isDeltaSetted) print_error_and_die("All moves are Tabu !");
+    if (inst->tenure > 0 && !isDeltaSetted) print_error_and_die("All moves are Tabu !");
 
     //NOTE: If we are in the Tabu search mode i have to update the solution with the bost possible move founded
     if (minDeltaCost < -EPSILON || inst->tenure > 0) {
@@ -701,7 +718,7 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
        Una classica 3-opt kick (Double Bridge) riassembla come: A -> D -> C -> B
     */
 
-    unsigned int *temp_solution = (unsigned int *)malloc(inst->nnodes * sizeof(unsigned int));
+    unsigned int *temp_solution = (unsigned int *) malloc(inst->nnodes * sizeof(unsigned int));
     int pos = 0;
 
     // Segment A
@@ -727,10 +744,6 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
     return exitStatus;
 }
 
-
-short tabu_search_iteration() {
-    //TODO: Perform 1 move of the tabu search
-}
 
 int TSPopt(instance *inst) {
     int error = 0;
@@ -758,6 +771,7 @@ int TSPopt(instance *inst) {
         CPXgeterrorstring(env, error, errmsg);
         print_error_and_die(errmsg);
     }
+
     int ncols = CPXgetnumcols(env, lp);
     double *xstar = (double *) calloc(ncols, sizeof(double));
     if (CPXgetx(env, lp, xstar, 0, ncols - 1)) {

@@ -3,24 +3,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Input CSV
-CSV_FILE = "results.csv"
+CSV_FILE = r"C:\Users\filip\CLionProjects\unipd-or2-tiberio-serain\python\runs\results_100.csv"
 
 # Load data
 df = pd.read_csv(CSV_FILE)
 
-# Set index to instance names
-df = df.set_index("Instance")
-
 # Convert to numeric (in case of empty cells)
 df = df.apply(pd.to_numeric, errors="coerce")
 
-# Drop instances where all systems failed
+# Drop runs where all models failed
 df = df.dropna(how="all")
 
-# Number of problems
+# Number of problems (runs)
 n_problems = df.shape[0]
 
-# Compute best value per instance
+# Compute best value per run
 best = df.min(axis=1)
 
 # Compute performance ratios
@@ -52,5 +49,6 @@ plt.legend()
 plt.grid(True)
 
 plt.tight_layout()
-plt.savefig("performance_profile.png", dpi=300)
+
+# SOLO SHOW (no save)
 plt.show()

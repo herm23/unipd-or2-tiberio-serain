@@ -2,66 +2,78 @@ import os
 import re
 import csv
 
-# Root directory containing instance folders
-ROOT_DIR = "path/to/your/root"  # <-- change this
+ROOT_DIR = r"C:\Users\filip\CLionProjects\unipd-or2-tiberio-serain\python\runs"
 
-# Regex to extract Best Cost
 COST_PATTERN = re.compile(r"Best Cost \(zbest\): ([\d\.]+)")
 
-# Data structure: {instance: {system: cost}}
-data = {}
+models = ["NN_2OPT_MS", "NN_VNS", "NN_TABU"]
 
-# Collect all system names (filenames)
-all_systems = set()
+# =========================
+# PARSING + CSV PER NODES
+# =========================
 
-# Iterate over instance folders
-for instance in os.listdir(ROOT_DIR):
-    instance_path = os.path.join(ROOT_DIR, instance)
+for nodes in os.listdir(ROOT_DIR):
+    nodes_path = os.path.join(ROOT_DIR, nodes)
 
-    if not os.path.isdir(instance_path):
+    if not os.path.isdir(nodes_path):
         continue
 
-    data[instance] = {}
+    print(f"Processing nodes = {nodes}")
 
-    # Iterate over files (systems)
-    for filename in os.listdir(instance_path):
-        file_path = os.path.join(instance_path, filename)
+    # {seed: {model: cost}}
+    data = {}
 
-        if not os.path.isfile(file_path):
+    for model in models:
+        model_path = os.path.join(nodes_path, model)
+
+        if not os.path.isdir(model_path):
             continue
 
-        all_systems.add(filename)
+        for seed_folder in os.listdir(model_path):
+            seed_path = os.path.join(model_path, seed_folder)
 
-        # Read file and extract Best Cost
-        with open(file_path, "r") as f:
-            content = f.read()
+            if not os.path.isdir(seed_path):
+                continue
 
-        match = COST_PATTERN.search(content)
-        if match:
-            cost = float(match.group(1))
-        else:
-            cost = None  # or use 0 / "" if preferred
+            # estrai seed
+            try:
+                seed = int(seed_folder.split("_")[1])
+            except:
+                continue
 
-        data[instance][filename] = cost
+            if seed not in data:
+                data[seed] = {}
 
-# Sort systems for consistent column order
-all_systems = sorted(all_systems)
+            # file unico dentro
+            for filename in os.listdir(seed_path):
+                file_path = os.path.join(seed_path, filename)
 
-# Write CSV
-output_file = "results.csv"
+                if not os.path.isfile(file_path):
+                    continue
 
-with open(output_file, "w", newline="") as csvfile:
-    writer = csv.writer(csvfile)
+                with open(file_path, "r") as f:
+                    content = f.read()
 
-    # Header
-    header = ["Instance"] + all_systems
-    writer.writerow(header)
+                match = COST_PATTERN.search(content)
+                cost = float(match.group(1)) if match else None
 
-    # Rows
-    for instance in sorted(data.keys()):
-        row = [instance]
-        for system in all_systems:
-            row.append(data[instance].get(system, ""))
-        writer.writerow(row)
+                data[seed][model] = cost
 
-print(f"CSV saved to {output_file}")
+    # =========================
+    # WRITE CSV (righe = run)
+    # =========================
+
+    output_file = f"results_{nodes}.csv"
+
+    with open(output_file, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+
+        # header
+        writer.writerow(models)
+
+        # righe: una per seed
+        for seed in sorted(data.keys()):
+            row = [data[seed].get(m, "") for m in models]
+            writer.writerow(row)
+
+    print(f"Saved {output_file}")

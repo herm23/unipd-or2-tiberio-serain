@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 
-short TSP_OPT(instance *inst);
+short optimize(instance *inst);
 
 /**
  * @brief The main entry point of the program.
@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
     init_distances(&inst);
 
 
-    TSP_OPT(&inst);
+    optimize(&inst);
 
     short check_solution = is_solution_valid(&inst, inst.solution, inst.zbest);
     if (!check_solution) {
@@ -110,7 +110,7 @@ unsigned int *prepare_temp_solution(instance *inst, double *cost, double *time) 
  * @param inst Pointer to the instance structure.
  * @return short Returns 0 on success.
  */
-short TSP_OPT(instance *inst) {
+short optimize(instance *inst) {
     // INIT
     inst->solution = initialize_identity_solution(inst->nnodes);
 
@@ -163,6 +163,7 @@ short TSP_OPT(instance *inst) {
         case NN_AND_TABUSEARCH:
         case GRASP_AND_TABUSEARCH: {
             inst->tenure = 20;
+            inst->GRASP_alpha = 0;
             inst->VNS_kick_counter = 0;
         }
         break;
@@ -193,9 +194,6 @@ short TSP_OPT(instance *inst) {
             greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
 
             twoOpt_refinement(inst, inst->timelimit, inst->solution, &inst->zbest, &inst->tbest);
-
-            // update_instance_solution(inst, temp_solution, temp_solution_cost, curr_time);
-            // free(temp_solution);
         }
         break;
 

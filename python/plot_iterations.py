@@ -11,7 +11,7 @@ HALF = MAX_POINTS // 2
 colors = {
     "nn": "green",
     "2opt": "red",
-    "kick": "blue"
+    "kick": "pink"
 }
 
 ALPHA_LIGHT = 0.03
