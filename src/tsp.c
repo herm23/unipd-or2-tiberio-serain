@@ -784,14 +784,25 @@ int TSPopt(instance *inst) {
             if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
         }
     }
+
+
+    int *succ = (int *) malloc(inst->nnodes * sizeof(int));
+    int *comp = (int *) malloc(inst->nnodes * sizeof(int));
+    int ncomp;
+    build_sol(xstar, inst, succ, comp, &ncomp);
+    printf("Number of components: %d\n", ncomp);
+    for (int i = 0; i < inst->nnodes; i++) {
+        printf("Node %d -> Successor: %d\n", i + 1, succ[i] + 1);
+    }
+    free(succ);
+    free(comp);
     free(xstar);
 
-    // free and close cplex model
     CPXfreeprob(env, &lp);
     CPXcloseCPLEX(&env);
-
     return 0;
 }
+
 
 int xpos(int i, int j, instance *inst) {
     if (i == j) print_error_and_die(" i == j in xpos");
@@ -854,4 +865,62 @@ void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) {
 
     free(cname[0]);
     free(cname);
+}
+
+
+#define DEBUG    // da commentare se non si vuole il debugging
+#define EPS 1e-5
+
+void build_sol(const double *xstar, instance *inst, int *succ, int *comp, int *ncomp) {
+#ifdef DEBUG
+    int *degree = (int *) calloc(inst->nnodes, sizeof(int));
+    for (int i = 0; i < inst->nnodes; i++) {
+        for (int j = i + 1; j < inst->nnodes; j++) {
+            int k = xpos(i, j, inst);
+            if (fabs(xstar[k]) > EPS && fabs(xstar[k] - 1.0) > EPS)
+                print_error_and_die(" wrong xstar in build_sol()");
+            if (xstar[k] > 0.5) {
+                ++degree[i];
+                ++degree[j];
+            }
+        }
+    }
+    for (int i = 0; i < inst->nnodes; i++) {
+        if (degree[i] != 2) print_error_and_die("wrong degree in build_sol()");
+    }
+    free(degree);
+#endif
+
+    *ncomp = 0;
+    for (int i = 0; i < inst->nnodes; i++) {
+        succ[i] = -1;
+        comp[i] = -1;
+    }
+
+    for (int start = 0; start < inst->nnodes; start++) {
+        if (comp[start] >= 0) continue; // node "start" was already visited, just skip it
+
+        // a new component is found
+        (*ncomp)++;
+        int i = start;
+        int done = 0;
+        while (!done) // go and visit the current component
+        {
+            comp[i] = *ncomp;
+            done = 1;
+            for (int j = 0; j < inst->nnodes; j++) {
+                if (i != j && xstar[xpos(i, j, inst)] > 0.5 && comp[j] == -1)
+                // the edge [i,j] is selected in xstar and j was not visited before
+                {
+                    succ[i] = j;
+                    i = j;
+                    done = 0;
+                    break;
+                }
+            }
+        }
+        succ[i] = start; // last arc to close the cycle
+
+        // go to the next component...
+    }
 }

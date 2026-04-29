@@ -162,7 +162,7 @@ short optimize(instance *inst) {
         break;
         case NN_AND_TABUSEARCH:
         case GRASP_AND_TABUSEARCH: {
-            inst->tenure = 20;
+            inst->tenure = 100;
             inst->GRASP_alpha = 0;
             inst->VNS_kick_counter = 0;
         }
@@ -190,7 +190,7 @@ short optimize(instance *inst) {
         case GRASP_AND_VNS:
         case NN_AND_TABUSEARCH:
         case GRASP_AND_TABUSEARCH: {
-            double ratio = 0.2;
+            double ratio = 0.1;
             greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
 
             twoOpt_refinement(inst, inst->timelimit, inst->solution, &inst->zbest, &inst->tbest);

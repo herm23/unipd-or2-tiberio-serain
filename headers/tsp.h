@@ -183,5 +183,7 @@ int xpos(int i, int j, instance *inst);
 
 void build_model(instance *inst, CPXENVptr env, CPXLPptr lp);
 
+void build_sol(const double *xstar, instance *inst, int *succ, int *comp, int *ncomp);
+
 
 #endif //UNIPD_OR2_TIBERIO_SERAIN_TSP_H

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Input CSV
-CSV_FILE = r"C:\Users\filip\CLionProjects\unipd-or2-tiberio-serain\python\runs\results_100.csv"
+CSV_FILE = r"./runs/results_1000.csv"
 
 # Load data
 df = pd.read_csv(CSV_FILE)
