@@ -64,6 +64,10 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
             return;
         }
         // fprintf(inst->plot, "set term qt\n");
+
+        //TODO: With this the log "QSocketNotifier: Can only be used with threads started with QThread" disappears
+        //Lo teniamo Filippo ?
+        fprintf(inst->plot, "set term wxt\n"); 
     }
 
     /* ----------- Gnuplot configuration ----------- */
@@ -779,12 +783,12 @@ int TSPopt(instance *inst) {
         CPXgeterrorstring(env, error, errmsg);
         print_error_and_die(errmsg);
     }
+
     for (int i = 0; i < inst->nnodes; i++) {
         for (int j = i + 1; j < inst->nnodes; j++) {
             if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
         }
     }
-
 
     int *succ = (int *) malloc(inst->nnodes * sizeof(int));
     int *comp = (int *) malloc(inst->nnodes * sizeof(int));
