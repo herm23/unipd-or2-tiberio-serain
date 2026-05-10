@@ -67,7 +67,7 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
 
         //TODO: With this the log "QSocketNotifier: Can only be used with threads started with QThread" disappears
         //Lo teniamo Filippo ?
-        fprintf(inst->plot, "set term wxt\n"); 
+        // fprintf(inst->plot, "set term wxt\n"); 
     }
 
     /* ----------- Gnuplot configuration ----------- */
@@ -769,41 +769,95 @@ int TSPopt(instance *inst) {
     build_model(inst, env, lp);
 
     // Cplex's parameter setting TODO!
-
-    if (CPXmipopt(env, lp)) {
-        char errmsg[CPXMESSAGEBUFSIZE];
-        CPXgeterrorstring(env, error, errmsg);
-        print_error_and_die(errmsg);
-    }
-
-    int ncols = CPXgetnumcols(env, lp);
-    double *xstar = (double *) calloc(ncols, sizeof(double));
-    if (CPXgetx(env, lp, xstar, 0, ncols - 1)) {
-        char errmsg[CPXMESSAGEBUFSIZE];
-        CPXgeterrorstring(env, error, errmsg);
-        print_error_and_die(errmsg);
-    }
-
-    for (int i = 0; i < inst->nnodes; i++) {
-        for (int j = i + 1; j < inst->nnodes; j++) {
-            if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
-        }
-    }
-
     int *succ = (int *) malloc(inst->nnodes * sizeof(int));
     int *comp = (int *) malloc(inst->nnodes * sizeof(int));
+    int ncols = CPXgetnumcols(env, lp);
+    double *xstar = (double *) calloc(ncols, sizeof(double));
     int ncomp;
-    build_sol(xstar, inst, succ, comp, &ncomp);
-    printf("Number of components: %d\n", ncomp);
-    for (int i = 0; i < inst->nnodes; i++) {
-        printf("Node %d -> Successor: %d\n", i + 1, succ[i] + 1);
-    }
+
+    //Used for SECs
+    int secCount = 0;
+    char **cname = (char **) calloc(1, sizeof(char *));
+    cname[0] = (char *) calloc(100, sizeof(char));
+    int izero = 0;
+    int *index = (int *) malloc(inst->nnodes * sizeof(int));
+    double *value = (double *) malloc(inst->nnodes * sizeof(double));
+
+    do
+    {
+        if (CPXmipopt(env, lp)) {
+            char errmsg[CPXMESSAGEBUFSIZE];
+            CPXgeterrorstring(env, error, errmsg);
+            print_error_and_die(errmsg);
+        }
+
+        if (CPXgetx(env, lp, xstar, 0, ncols - 1)) {
+            char errmsg[CPXMESSAGEBUFSIZE];
+            CPXgeterrorstring(env, error, errmsg);
+            print_error_and_die(errmsg);
+        }
+
+        for (int i = 0; i < inst->nnodes; i++) {
+            for (int j = i + 1; j < inst->nnodes; j++) {
+                if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
+            }
+        }
+        
+        build_sol(xstar, inst, succ, comp, &ncomp);
+        printf("Number of components: %d\n", ncomp);
+        for (int i = 0; i < inst->nnodes; i++) {
+            printf("Node %d -> Successor: %d\n", i + 1, succ[i] + 1);
+        }
+
+        //NOTE: Preprocessing. 
+        
+        //Foreach component count the number of nodes
+        int *compCounts = (int *) calloc(ncomp, sizeof(int));
+
+        for(int i = 0; i < inst->nnodes; i++)
+            compCounts[comp[i]-1]++;
+        
+
+        for(int i = 0; i < ncomp; i++)
+        {
+            double rhs = compCounts[i] - 1;
+            char sense = 'L';
+            secCount++;
+            sprintf(cname[0], "SEC for component %d", secCount); //TODO: Improve log
+            //Define the actual constraint
+            //TODO: Take the correct indexes based on the component
+            int nnz = 0;
+            for (int j = 0; j < ncols; j++) {
+                if (j != j+1) continue;
+                // index[nnz] = xpos(i, h, inst);
+                value[nnz] = 1.0;
+                nnz++;
+            }
+            //TODO: Take also the indeces coming from the internal edges !
+
+            int status = CPXaddrows(env, lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]);
+            if (status) {
+                char errmsg[CPXMESSAGEBUFSIZE];
+                CPXgeterrorstring(env, status, errmsg);
+                print_error_and_die(errmsg);
+            }
+        }
+
+        free(compCounts);
+
+    } while (ncomp > 1);
+    
+    free(index);
+    free(value);
     free(succ);
     free(comp);
     free(xstar);
 
     CPXfreeprob(env, &lp);
     CPXcloseCPLEX(&env);
+
+    //Print solution
+
     return 0;
 }
 
@@ -870,6 +924,8 @@ void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) {
     free(cname[0]);
     free(cname);
 }
+
+
 
 
 #define DEBUG    // da commentare se non si vuole il debugging
