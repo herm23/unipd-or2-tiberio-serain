@@ -56,6 +56,14 @@ enum TSP_REFINEMENT_STRATEGY {
  */
 void plot_solution(instance *inst, const unsigned int *solution, int only_instance, short pause);
 
+/**
+ * @brief Plots the current solution (including subtours) using gnuplot by visualizing edges from the successor array.
+ * 
+ * @param inst Pointer to the instance structure containing coordinates and plot pipe.
+ * @param succ Array where succ[i] represents the index of the node followed by node i.
+ */
+void plot_solution_edges(instance *inst, const int *succ);
+
 void plot_iteration(instance *inst, double curr_cost, double curr_opt_cost, char *section);
 
 //endregion Plots

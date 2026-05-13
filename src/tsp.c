@@ -126,6 +126,56 @@ void plot_solution(instance *inst, const unsigned int *solution, int only_instan
     }
 }
 
+/**
+ * @brief Plots the current solution (including subtours) using gnuplot by visualizing edges from the successor array.
+ * 
+ * @param inst Pointer to the instance structure containing coordinates and plot pipe.
+ * @param succ Array where succ[i] represents the index of the node followed by node i.
+ */
+void plot_solution_edges(instance *inst, const int *succ) {
+    if (inst->no_plot || inst->plot == NULL) return;
+
+    /* ---- Gnuplot configuration ---- */
+    fprintf(inst->plot, "set title 'TSP Solution (including subtours)'\n");
+    fprintf(inst->plot, "set xlabel 'X'\n");
+    fprintf(inst->plot, "set ylabel 'Y'\n");
+    fprintf(inst->plot, "set grid\n");
+    fprintf(inst->plot, "set key off\n");
+    fprintf(inst->plot, "set size ratio -1\n"); /* Maintain aspect ratio */
+
+    /* ---- Plot edges and nodes ---- */
+    // 'with vectors' draws from (x,y) to (x+dx, y+dy). 
+    // 'nohead' can be used if you don't want arrows, but 'head filled' is better for direction.
+    fprintf(inst->plot,
+            "plot '-' with vectors head filled lw 2 lc rgb 'red', "
+            "'-' with points pt 7 ps 1.5 lc rgb 'blue'\n");
+
+    /* ---- 1. Draw edges based on the successor array ---- */
+    for (int i = 0; i < inst->nnodes; ++i) {
+        int next = succ[i];
+        
+        // Skip if successor is invalid or points to itself
+        if (next < 0 || next >= inst->nnodes || next == i) continue;
+
+        double x = inst->xcoord[i];
+        double y = inst->ycoord[i];
+        
+        // IMPORTANT: dx and dy must be the RELATIVE distance
+        double dx = inst->xcoord[next] - x;
+        double dy = inst->ycoord[next] - y;
+
+        fprintf(inst->plot, "%f %f %f %f\n", x, y, dx, dy);
+    }
+    fprintf(inst->plot, "e\n"); // End of vector data
+
+    /* ---- 2. Draw nodes ---- */
+    for (int i = 0; i < inst->nnodes; ++i) {
+        fprintf(inst->plot, "%f %f\n", inst->xcoord[i], inst->ycoord[i]);
+    }
+    fprintf(inst->plot, "e\n"); // End of point data
+
+    fflush(inst->plot);
+}
 
 void plot_iteration(instance *inst, double curr_cost, double curr_opt_cost, char *section) {
     return;
@@ -780,8 +830,10 @@ int TSPopt(instance *inst) {
     char **cname = (char **) calloc(1, sizeof(char *));
     cname[0] = (char *) calloc(100, sizeof(char));
     int izero = 0;
-    int *index = (int *) malloc(inst->nnodes * sizeof(int));
-    double *value = (double *) malloc(inst->nnodes * sizeof(double));
+
+    int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
+    int *index = (int *) malloc(max_nnz * sizeof(int));
+    double *value = (double *) malloc(max_nnz * sizeof(double));
 
     do
     {
@@ -804,46 +856,58 @@ int TSPopt(instance *inst) {
         }
         
         build_sol(xstar, inst, succ, comp, &ncomp);
-        printf("Number of components: %d\n", ncomp);
-        for (int i = 0; i < inst->nnodes; i++) {
-            printf("Node %d -> Successor: %d\n", i + 1, succ[i] + 1);
-        }
 
-        //NOTE: Preprocessing. 
-        
-        //Foreach component count the number of nodes
-        int *compCounts = (int *) calloc(ncomp, sizeof(int));
+        //Debug
+        plot_solution_edges(inst, succ);
 
-        for(int i = 0; i < inst->nnodes; i++)
-            compCounts[comp[i]-1]++;
-        
-
-        for(int i = 0; i < ncomp; i++)
+        if (ncomp > 1)
         {
-            double rhs = compCounts[i] - 1;
-            char sense = 'L';
-            secCount++;
-            sprintf(cname[0], "SEC for component %d", secCount); //TODO: Improve log
-            //Define the actual constraint
-            //TODO: Take the correct indexes based on the component
-            int nnz = 0;
-            for (int j = 0; j < ncols; j++) {
-                if (j != j+1) continue;
-                // index[nnz] = xpos(i, h, inst);
-                value[nnz] = 1.0;
-                nnz++;
+            int *compCounts = (int *)calloc(ncomp, sizeof(int));
+            for (int i = 0; i < inst->nnodes; i++)
+            {
+                compCounts[comp[i] - 1]++;
             }
-            //TODO: Take also the indeces coming from the internal edges !
 
-            int status = CPXaddrows(env, lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]);
-            if (status) {
-                char errmsg[CPXMESSAGEBUFSIZE];
-                CPXgeterrorstring(env, status, errmsg);
-                print_error_and_die(errmsg);
+            for (int k = 0; k < ncomp; k++)
+            {
+                int nnz = 0;
+                int num_nodes_in_s = compCounts[k];
+
+                if (num_nodes_in_s >= inst->nnodes)
+                    continue;
+
+                double rhs = (double)num_nodes_in_s - 1.0;
+                char sense = 'L';
+
+                for (int i = 0; i < inst->nnodes; i++)
+                {
+                    if (comp[i] - 1 != k)
+                        continue;
+
+                    for (int j = i + 1; j < inst->nnodes; j++)
+                    {
+                        if (comp[j] - 1 != k)
+                            continue;
+
+                        //Adding all possible edges that i have and can have in this subtour
+                        index[nnz] = index_upper(i, j, inst->nnodes);
+                        value[nnz] = 1.0;
+                        nnz++;
+                    }
+                }
+
+                sprintf(cname[0], "SEC_%d", ++secCount);
+
+                int status = CPXaddrows(env, lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, cname);
+                if (status)
+                {
+                    char errmsg[CPXMESSAGEBUFSIZE];
+                    CPXgeterrorstring(env, status, errmsg);
+                    print_error_and_die(errmsg);
+                }
             }
+            free(compCounts);
         }
-
-        free(compCounts);
 
     } while (ncomp > 1);
     
