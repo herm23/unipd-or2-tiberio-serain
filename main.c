@@ -76,6 +76,13 @@ int main(int argc, char **argv) {
         }
     }
 
+    //NOTE: Closing the plot window
+    if (inst.plot != NULL) {
+        pclose(inst.plot);
+        inst.plot = NULL;
+        system("killall -9 gnuplot_qt gnuplot 2>/dev/null");
+    }
+
     free_instance(&inst);
     return 0;
 }

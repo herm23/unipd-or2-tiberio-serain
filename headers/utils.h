@@ -41,7 +41,7 @@ typedef struct {
     double zstart;
     double tstart;
 
-    unsigned int *solution; // best sol. available
+    unsigned int *solution; // best sol. available (Array of node indeces)
     int no_plot; // disable plotting
     int verbosity; // verbosity level
     char out_file[1000]; // output file for solution

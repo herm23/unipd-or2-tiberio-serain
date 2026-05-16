@@ -858,7 +858,7 @@ int TSPopt(instance *inst) {
         build_sol(xstar, inst, succ, comp, &ncomp);
 
         //Debug
-        plot_solution_edges(inst, succ);
+        //plot_solution_edges(inst, succ);
 
         if (ncomp > 1)
         {
@@ -910,7 +910,25 @@ int TSPopt(instance *inst) {
         }
 
     } while (ncomp > 1);
-    
+
+    int currNode = 0;
+    //NOTE: Build the final solution before leaving
+    for (int i = 0; i < inst->nnodes; i++)
+    {
+        inst->solution[i] = succ[currNode];
+        currNode = succ[currNode];
+    }
+
+    //NOTE: Update correct cost
+    double objval;
+    if (CPXgetobjval(env, lp, &objval)) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
+
+    inst->zbest = objval;
+
     free(index);
     free(value);
     free(succ);
@@ -919,8 +937,6 @@ int TSPopt(instance *inst) {
 
     CPXfreeprob(env, &lp);
     CPXcloseCPLEX(&env);
-
-    //Print solution
 
     return 0;
 }
@@ -995,8 +1011,18 @@ void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) {
 #define DEBUG    // da commentare se non si vuole il debugging
 #define EPS 1e-5
 
+/**
+ * @brief  Builds the connected components (subtours) from the current solution vector.
+ *
+ * @param  xstar  Pointer to the continuous solution array (edge values).
+ * @param  inst   Pointer to the instance structure containing graph details.
+ * @param  succ   Array to store the successor of each node in the tour.
+ * @param  comp   Array to map each node to its corresponding component ID.
+ * @param  ncomp  Pointer to integer where the total number of components will be stored.
+ */
 void build_sol(const double *xstar, instance *inst, int *succ, int *comp, int *ncomp) {
 #ifdef DEBUG
+    // Verify that every node has exactly degree 2 and variables are binary
     int *degree = (int *) calloc(inst->nnodes, sizeof(int));
     for (int i = 0; i < inst->nnodes; i++) {
         for (int j = i + 1; j < inst->nnodes; j++) {
@@ -1015,27 +1041,29 @@ void build_sol(const double *xstar, instance *inst, int *succ, int *comp, int *n
     free(degree);
 #endif
 
+    // Initialize components and successors arrays
     *ncomp = 0;
     for (int i = 0; i < inst->nnodes; i++) {
         succ[i] = -1;
         comp[i] = -1;
     }
 
+    // Find and trace all connected components
     for (int start = 0; start < inst->nnodes; start++) {
-        if (comp[start] >= 0) continue; // node "start" was already visited, just skip it
+        if (comp[start] >= 0) continue; // Skip already visited nodes
 
-        // a new component is found
+        // New component found
         (*ncomp)++;
         int i = start;
         int done = 0;
-        while (!done) // go and visit the current component
+
+        while (!done) // Traverse the current component
         {
             comp[i] = *ncomp;
             done = 1;
             for (int j = 0; j < inst->nnodes; j++) {
-                if (i != j && xstar[xpos(i, j, inst)] > 0.5 && comp[j] == -1)
-                // the edge [i,j] is selected in xstar and j was not visited before
-                {
+                // If edge (i,j) is active and j is unvisited
+                if (i != j && xstar[xpos(i, j, inst)] > 0.5 && comp[j] == -1) {
                     succ[i] = j;
                     i = j;
                     done = 0;
@@ -1043,8 +1071,6 @@ void build_sol(const double *xstar, instance *inst, int *succ, int *comp, int *n
                 }
             }
         }
-        succ[i] = start; // last arc to close the cycle
-
-        // go to the next component...
+        succ[i] = start; // Close the subtour cycle
     }
 }
