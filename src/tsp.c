@@ -799,6 +799,58 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
 }
 
 
+void apply_patching(instance *inst, int *succ, int *comp, int *ncomp) {
+    if (*ncomp <= 1) return;
+
+    if (inst->verbosity >= INFO) {
+        printf("[Patching] Starting global patching to merge %d components...\n", *ncomp);
+    }
+
+    while (*ncomp > 1) {
+        double best_delta = 1e30;
+        int best_i = -1;
+        int best_j = -1;
+
+        for (int i = 0; i < inst->nnodes; i++) {
+            int next_i = succ[i];
+            double dist_i_nexti = get_precalculated_distance(inst, i, next_i);
+
+            for (int j = i + 1; j < inst->nnodes; j++) {
+                if (comp[i] == comp[j]) continue;
+
+                int next_j = succ[j];
+                double dist_j_nextj = get_precalculated_distance(inst, j, next_j);
+
+                double delta = (get_precalculated_distance(inst, i, next_j) + get_precalculated_distance(inst, j, next_i)) - (dist_i_nexti + dist_j_nextj);
+
+                if (delta < best_delta) {
+                    best_delta = delta;
+                    best_i = i;
+                    best_j = j;
+                }
+            }
+        }
+
+        if (best_i != -1 && best_j != -1) {
+            int old_next_i = succ[best_i];
+            int old_next_j = succ[best_j];
+            succ[best_i] = old_next_j;
+            succ[best_j] = old_next_i;
+
+            int comp_to_replace = comp[best_j];
+            int new_comp_label = comp[best_i];
+            for (int k = 0; k < inst->nnodes; k++) {
+                if (comp[k] == comp_to_replace) comp[k] = new_comp_label;
+            }
+            (*ncomp)--;
+        }
+    }
+
+    if (inst->verbosity >= INFO) {
+        printf("[Patching] Finished patching heuristic");
+    }
+}
+
 int TSPopt(instance *inst) {
     int error = 0;
 
@@ -837,6 +889,18 @@ int TSPopt(instance *inst) {
 
     do
     {
+        double elapsed = second() - inst->tstart;
+        double residual_time = inst->timelimit - elapsed;
+
+        if (residual_time <= 0) break;
+
+        CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
+
+        if (inst->verbosity >= DEBUG) {
+            printf("\n--- Starting SEC iteration %d ---\n", secCount + 1);
+            printf("Elapsed time: %.2f s | Residual time: %.2f s\n", elapsed, residual_time);
+        }
+
         if (CPXmipopt(env, lp)) {
             char errmsg[CPXMESSAGEBUFSIZE];
             CPXgeterrorstring(env, error, errmsg);
@@ -854,11 +918,11 @@ int TSPopt(instance *inst) {
                 if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
             }
         }
-        
+
         build_sol(xstar, inst, succ, comp, &ncomp);
 
         //Debug
-        //plot_solution_edges(inst, succ);
+        plot_solution_edges(inst, succ);
 
         if (ncomp > 1)
         {
@@ -909,26 +973,41 @@ int TSPopt(instance *inst) {
             free(compCounts);
         }
 
+        if (second() - inst->tstart > inst->timelimit) break;
+
     } while (ncomp > 1);
 
+    //NOTE: Managing time expiration
+    //(This logic can be improved)
+    if (ncomp > 1) {
+        apply_patching(inst, succ, comp, &ncomp);
+
+        // Calculate objective function manually after patching
+        double manual_obj = 0;
+        for (int i = 0; i < inst->nnodes; i++) {
+            manual_obj += get_precalculated_distance(inst, i, succ[i]);
+        }
+        inst->zbest = manual_obj;
+    } else {
+        //NOTE: Update correct cost from CPLEX if no patching was needed
+        double objval;
+        if (CPXgetobjval(env, lp, &objval)) {
+            char errmsg[CPXMESSAGEBUFSIZE];
+            CPXgeterrorstring(env, error, errmsg);
+            print_error_and_die(errmsg);
+        }
+        inst->zbest = objval;
+    }
+
+    //NOTE: Build the final solution before leaving (valid for both cases)
     int currNode = 0;
-    //NOTE: Build the final solution before leaving
-    for (int i = 0; i < inst->nnodes; i++)
-    {
+    for (int i = 0; i < inst->nnodes; i++) {
         inst->solution[i] = succ[currNode];
         currNode = succ[currNode];
     }
 
-    //NOTE: Update correct cost
-    double objval;
-    if (CPXgetobjval(env, lp, &objval)) {
-        char errmsg[CPXMESSAGEBUFSIZE];
-        CPXgeterrorstring(env, error, errmsg);
-        print_error_and_die(errmsg);
-    }
-
-    inst->zbest = objval;
-
+    free(cname[0]);
+    free(cname);
     free(index);
     free(value);
     free(succ);
