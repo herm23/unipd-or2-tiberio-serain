@@ -955,10 +955,11 @@ static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) 
     int *comp = (int *) malloc(inst->nnodes * sizeof(int));
     int ncomp;
 
-    // Analizziamo la soluzione usando la tua build_sol
     build_sol(xstar, inst, succ, comp, &ncomp);
 
-    // Se ci sono sottotour, la soluzione è inammissibile: generiamo i tagli
+    //Debug
+    //plot_solution_edges(inst, succ);
+
     if (ncomp > 1) {
         int *compCounts = (int *) calloc(ncomp, sizeof(int));
         for (int i = 0; i < inst->nnodes; i++) {
@@ -991,7 +992,6 @@ static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) 
                 }
             }
 
-            // Rifiutiamo la soluzione iniettando la SEC
             if (nnz > 0) {
                 error = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, index, value);
                 if (error) break;
@@ -1019,7 +1019,6 @@ static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst)
 static int CPXPUBLIC my_callback(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle) {
     instance* inst = (instance*) userhandle;
 
-    // Il driver legge il contesto corrente e decide a quale sotto-funzione passare la palla
     if (contextid == CPX_CALLBACKCONTEXT_CANDIDATE) {
         return my_callback_candidate(context, inst);
     }
@@ -1070,9 +1069,6 @@ static void TSPopt_callbacks(instance *inst, CPXENVptr env, CPXLPptr lp, double 
     }
 
     build_sol(xstar, inst, succ, comp, ncomp);
-
-    //Debug
-    plot_solution_edges(inst, succ);
 }
 
 int TSPopt(instance *inst, enum CPLEX_MODE mode) {
