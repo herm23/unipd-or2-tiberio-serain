@@ -209,7 +209,9 @@ short optimize(instance *inst) {
             break;
 
         case CPLEX:
-            TSPopt(inst);
+            //TODO: External param ?
+            enum CPLEX_MODE mode = CALLBACKS;
+            TSPopt(inst, mode);
             break;
 
         default:

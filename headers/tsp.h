@@ -45,6 +45,11 @@ enum TSP_REFINEMENT_STRATEGY {
     TWO_OPT,
 };
 
+enum CPLEX_MODE {
+    BENDERS_LOOP,
+    CALLBACKS,
+};
+
 
 //region Plots
 /**
@@ -185,7 +190,7 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol);
 //endregion Refinements
 
 
-int TSPopt(instance *inst);
+int TSPopt(instance *inst, enum CPLEX_MODE mode);
 
 int xpos(int i, int j, instance *inst);
 

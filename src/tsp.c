@@ -851,44 +851,13 @@ void apply_patching(instance *inst, int *succ, int *comp, int *ncomp) {
     }
 }
 
-int TSPopt(instance *inst) {
+static void TSPopt_benders(instance *inst, CPXENVptr env, CPXLPptr lp, double *xstar,
+                           int *succ, int *comp, int *ncomp, int *index, double *value, char **cname) {
     int error = 0;
-
-    CPXENVptr env = CPXopenCPLEX(&error);
-    if (error || env == NULL) {
-        char errmsg[CPXMESSAGEBUFSIZE];
-        CPXgeterrorstring(env, error, errmsg);
-        print_error_and_die(errmsg);
-    }
-
-    CPXLPptr lp = CPXcreateprob(env, &error, "TSP");
-    if (error || lp == NULL) {
-        char errmsg[CPXMESSAGEBUFSIZE];
-        CPXgeterrorstring(env, error, errmsg);
-        print_error_and_die(errmsg);
-    }
-
-    build_model(inst, env, lp);
-
-    // Cplex's parameter setting TODO!
-    int *succ = (int *) malloc(inst->nnodes * sizeof(int));
-    int *comp = (int *) malloc(inst->nnodes * sizeof(int));
-    int ncols = CPXgetnumcols(env, lp);
-    double *xstar = (double *) calloc(ncols, sizeof(double));
-    int ncomp;
-
-    //Used for SECs
     int secCount = 0;
-    char **cname = (char **) calloc(1, sizeof(char *));
-    cname[0] = (char *) calloc(100, sizeof(char));
     int izero = 0;
 
-    int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
-    int *index = (int *) malloc(max_nnz * sizeof(int));
-    double *value = (double *) malloc(max_nnz * sizeof(double));
-
-    do
-    {
+    do {
         double elapsed = second() - inst->tstart;
         double residual_time = inst->timelimit - elapsed;
 
@@ -907,53 +876,45 @@ int TSPopt(instance *inst) {
             print_error_and_die(errmsg);
         }
 
-        if (CPXgetx(env, lp, xstar, 0, ncols - 1)) {
+        if (CPXgetx(env, lp, xstar, 0, inst->ncols - 1)) {
             char errmsg[CPXMESSAGEBUFSIZE];
             CPXgeterrorstring(env, error, errmsg);
             print_error_and_die(errmsg);
         }
 
-        for (int i = 0; i < inst->nnodes; i++) {
-            for (int j = i + 1; j < inst->nnodes; j++) {
-                if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
-            }
-        }
+        //Debug (Can be removed)
+        // for (int i = 0; i < inst->nnodes; i++) {
+        //     for (int j = i + 1; j < inst->nnodes; j++) {
+        //         if (xstar[xpos(i, j, inst)] > 0.5) printf("  ... x(%3d,%3d) = 1\n", i + 1, j + 1);
+        //     }
+        // }
 
-        build_sol(xstar, inst, succ, comp, &ncomp);
+        build_sol(xstar, inst, succ, comp, ncomp);
 
         //Debug
         plot_solution_edges(inst, succ);
 
-        if (ncomp > 1)
-        {
-            int *compCounts = (int *)calloc(ncomp, sizeof(int));
-            for (int i = 0; i < inst->nnodes; i++)
-            {
+        if (*ncomp > 1) {
+            int *compCounts = (int *)calloc(*ncomp, sizeof(int));
+            for (int i = 0; i < inst->nnodes; i++) {
                 compCounts[comp[i] - 1]++;
             }
 
-            for (int k = 0; k < ncomp; k++)
-            {
+            for (int k = 0; k < *ncomp; k++) {
                 int nnz = 0;
                 int num_nodes_in_s = compCounts[k];
 
-                if (num_nodes_in_s >= inst->nnodes)
-                    continue;
+                if (num_nodes_in_s >= inst->nnodes) continue;
 
                 double rhs = (double)num_nodes_in_s - 1.0;
                 char sense = 'L';
 
-                for (int i = 0; i < inst->nnodes; i++)
-                {
-                    if (comp[i] - 1 != k)
-                        continue;
+                for (int i = 0; i < inst->nnodes; i++) {
+                    if (comp[i] - 1 != k) continue;
 
-                    for (int j = i + 1; j < inst->nnodes; j++)
-                    {
-                        if (comp[j] - 1 != k)
-                            continue;
+                    for (int j = i + 1; j < inst->nnodes; j++) {
+                        if (comp[j] - 1 != k) continue;
 
-                        //Adding all possible edges that i have and can have in this subtour
                         index[nnz] = index_upper(i, j, inst->nnodes);
                         value[nnz] = 1.0;
                         nnz++;
@@ -963,8 +924,7 @@ int TSPopt(instance *inst) {
                 sprintf(cname[0], "SEC_%d", ++secCount);
 
                 int status = CPXaddrows(env, lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, cname);
-                if (status)
-                {
+                if (status) {
                     char errmsg[CPXMESSAGEBUFSIZE];
                     CPXgeterrorstring(env, status, errmsg);
                     print_error_and_die(errmsg);
@@ -975,21 +935,216 @@ int TSPopt(instance *inst) {
 
         if (second() - inst->tstart > inst->timelimit) break;
 
-    } while (ncomp > 1);
+    } while (*ncomp > 1);
+}
 
-    //NOTE: Managing time expiration
-    //(This logic can be improved)
+//Callback for integer candidates
+static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) {
+    int error = 0;
+
+    double *xstar = (double *) malloc(inst->ncols * sizeof(double));
+    double objval = CPX_INFBOUND;
+
+    //NOTE: Get xstar from cplex
+    if (CPXcallbackgetcandidatepoint(context, xstar, 0, inst->ncols - 1, &objval)) {
+        free(xstar);
+        return 1;
+    }
+
+    int *succ = (int *) malloc(inst->nnodes * sizeof(int));
+    int *comp = (int *) malloc(inst->nnodes * sizeof(int));
+    int ncomp;
+
+    // Analizziamo la soluzione usando la tua build_sol
+    build_sol(xstar, inst, succ, comp, &ncomp);
+
+    // Se ci sono sottotour, la soluzione è inammissibile: generiamo i tagli
     if (ncomp > 1) {
+        int *compCounts = (int *) calloc(ncomp, sizeof(int));
+        for (int i = 0; i < inst->nnodes; i++) {
+            compCounts[comp[i] - 1]++;
+        }
+
+        int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
+        int *index = (int *) malloc(max_nnz * sizeof(int));
+        double *value = (double *) malloc(max_nnz * sizeof(double));
+        int izero = 0;
+
+        for (int k = 0; k < ncomp; k++) {
+            int nnz = 0;
+            int num_nodes_in_s = compCounts[k];
+
+            if (num_nodes_in_s >= inst->nnodes) continue;
+
+            double rhs = (double)num_nodes_in_s - 1.0;
+            char sense = 'L';
+
+            for (int i = 0; i < inst->nnodes; i++) {
+                if (comp[i] - 1 != k) continue;
+
+                for (int j = i + 1; j < inst->nnodes; j++) {
+                    if (comp[j] - 1 != k) continue;
+
+                    index[nnz] = index_upper(i, j, inst->nnodes);
+                    value[nnz] = 1.0;
+                    nnz++;
+                }
+            }
+
+            // Rifiutiamo la soluzione iniettando la SEC
+            if (nnz > 0) {
+                error = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, index, value);
+                if (error) break;
+            }
+        }
+
+        free(index);
+        free(value);
+        free(compCounts);
+    }
+
+    free(succ);
+    free(comp);
+    free(xstar);
+
+    return error;
+}
+
+//NOTE: Implement fractional solution
+static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst) {
+    return 0;
+}
+
+//NOTE: Callbacks driver
+static int CPXPUBLIC my_callback(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle) {
+    instance* inst = (instance*) userhandle;
+
+    // Il driver legge il contesto corrente e decide a quale sotto-funzione passare la palla
+    if (contextid == CPX_CALLBACKCONTEXT_CANDIDATE) {
+        return my_callback_candidate(context, inst);
+    }
+    if (contextid == CPX_CALLBACKCONTEXT_RELAXATION) {
+        return my_callback_relaxation(context, inst);
+    }
+
+    return 0;
+}
+
+static void TSPopt_callbacks(instance *inst, CPXENVptr env, CPXLPptr lp, double *xstar,
+                             int *succ, int *comp, int *ncomp) {
+    int error = 0;
+
+    // Configurazione del contesto per ricevere le Lazy Constraints (Candidati interi)
+    CPXLONG contextid = CPX_CALLBACKCONTEXT_CANDIDATE;
+
+    if (CPXcallbacksetfunc(env, lp, contextid, my_callback, inst)) {
+        print_error_and_die("Error in CPXcallbacksetfunc()");
+    }
+
+    // Calcolo e impostazione del time limit residuo iniziale
+    double elapsed = second() - inst->tstart;
+    double residual_time = inst->timelimit - elapsed;
+    if (residual_time < 0) residual_time = 0.0;
+
+    CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
+
+    if (inst->verbosity >= DEBUG) {
+        printf("\n[CPLEX] Starting optimization branch-and-cut with generic callbacks.\n");
+    }
+
+    if (CPXmipopt(env, lp)) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
+
+    //NOTE: Extract the CPLEX best sol.
+    if (CPXgetx(env, lp, xstar, 0, inst->ncols - 1)) {
+        if (inst->verbosity >= SILENT) {
+            printf("Warning: No feasible solution found or error retrieving xstar.\n");
+        }
+
+        //NOTE: Force patching heuristic execution
+        *ncomp = inst->nnodes;
+        return;
+    }
+
+    build_sol(xstar, inst, succ, comp, ncomp);
+
+    //Debug
+    plot_solution_edges(inst, succ);
+}
+
+int TSPopt(instance *inst, enum CPLEX_MODE mode) {
+    int error = 0;
+
+    CPXENVptr env = CPXopenCPLEX(&error);
+    if (error || env == NULL) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
+
+    CPXLPptr lp = CPXcreateprob(env, &error, "TSP");
+    if (error || lp == NULL) {
+        char errmsg[CPXMESSAGEBUFSIZE];
+        CPXgeterrorstring(env, error, errmsg);
+        print_error_and_die(errmsg);
+    }
+
+    build_model(inst, env, lp);
+
+    int *succ = (int *) calloc(inst->nnodes, sizeof(int));
+    int *comp = (int *) calloc(inst->nnodes, sizeof(int));
+    inst->ncols = CPXgetnumcols(env, lp);
+    double *xstar = (double *) calloc(inst->ncols, sizeof(double));
+    int ncomp = 0;
+
+    int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
+    int *index = (int *) calloc(max_nnz, sizeof(int));
+    double *value = (double *) calloc(max_nnz, sizeof(double));
+
+    char **cname = (char **) calloc(1, sizeof(char *));
+    cname[0] = (char *) calloc(100, sizeof(char));
+
+    // Gestione del flusso tramite lo switch dell'enumeratore richiesto
+    switch (mode) {
+        case BENDERS_LOOP:
+            TSPopt_benders(inst, env, lp, xstar, succ, comp, &ncomp, index, value, cname);
+            break;
+
+        case CALLBACKS:
+            TSPopt_callbacks(inst, env, lp, xstar, succ, comp, &ncomp);
+            break;
+
+        default:
+            print_error_and_die("Unknown CPLEX mode selected.");
+    }
+
+    //NOTE: Managing time expiration or sub-optimal termination (Valid for both modes)
+    if (ncomp > 1) {
+
+        //WARNING: Check if succ contains a valid composition of nodes
+        int is_succ_all_zeros = 1;
+        for (int i = 0; i < inst->nnodes; i++) {
+            if (succ[i] != 0) {
+                is_succ_all_zeros = 0;
+                break;
+            }
+        }
+
+        if (is_succ_all_zeros) {
+            print_error_and_die("Error: CPLEX execution was interrupted (e.g., time limit expired during breakpoint) before finding any solution. 'succ' array is uninitialized.");
+        }
+
         apply_patching(inst, succ, comp, &ncomp);
 
-        // Calculate objective function manually after patching
         double manual_obj = 0;
         for (int i = 0; i < inst->nnodes; i++) {
             manual_obj += get_precalculated_distance(inst, i, succ[i]);
         }
         inst->zbest = manual_obj;
     } else {
-        //NOTE: Update correct cost from CPLEX if no patching was needed
         double objval;
         if (CPXgetobjval(env, lp, &objval)) {
             char errmsg[CPXMESSAGEBUFSIZE];
@@ -999,7 +1154,7 @@ int TSPopt(instance *inst) {
         inst->zbest = objval;
     }
 
-    //NOTE: Build the final solution before leaving (valid for both cases)
+    //NOTE: Build the final solution before leaving
     int currNode = 0;
     for (int i = 0; i < inst->nnodes; i++) {
         inst->solution[i] = succ[currNode];

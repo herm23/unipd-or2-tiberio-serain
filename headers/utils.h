@@ -49,6 +49,9 @@ typedef struct {
     FILE *plot; //Tour plot
     FILE *cost_plot; //Cost vs iteration plot
 
+    //Cplex params
+    int ncols; //TODO: Review with filippo
+
 } instance;
 
 //endregion STRUCTURES
