@@ -1032,6 +1032,7 @@ static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) 
 static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst) {
     int error = 0;
 
+    //NOTE: Extracting current solution
     double *xstar = (double *) malloc(inst->ncols * sizeof(double));
     double objval = CPX_INFBOUND;
 
@@ -1040,13 +1041,16 @@ static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst)
         return 0;
     }
 
-    int ecount = 0;
+    //NOTE: Counting active arcs and defining data structures
+    int edge_cuts_counter = 0;
     for (int i = 0; i < inst->ncols; i++) {
-        if (xstar[i] > 1e-6) ecount++;
+        //TODO: Defining a global Epsilon
+        if (xstar[i] > 1e-6) edge_cuts_counter++;
     }
 
-    int *elist = (int *) malloc(2 * ecount * sizeof(int));
-    double *xlist = (double *) malloc(ecount * sizeof(double));
+    //NOTE: Defining data structure for concorde lib
+    int *elist = (int *) malloc(2 * edge_cuts_counter * sizeof(int));
+    double *xlist = (double *) malloc(edge_cuts_counter * sizeof(double));
 
     int edge_idx = 0;
     for (int i = 0; i < inst->nnodes; i++) {
@@ -1061,13 +1065,14 @@ static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst)
         }
     }
 
+    //NOTE: Concorde computation
     int *cut = NULL;
     int cutcount = 0;
     double min_cut_val;
 
-    // NOTE: CCcut_mincut richiede i puntatori a cut e cutcount per ritornare il set di nodi del taglio
-    int status = CCcut_mincut(inst->nnodes, ecount, elist, xlist, &min_cut_val, &cut, &cutcount);
+    int status = CCcut_mincut(inst->nnodes,  edge_cuts_counter, elist, xlist, &min_cut_val, &cut, &cutcount);
 
+    //NOTE: Adding SEC for this weak component (Same logic as previous SECs)
     if (status == 0 && min_cut_val < 2.0 - 1e-4 && cutcount >= 2 && cutcount <= inst->nnodes - 2) {
 
         int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
