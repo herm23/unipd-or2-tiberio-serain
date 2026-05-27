@@ -10,8 +10,8 @@ add_executable(unipd_or2_tiberio_serain
         src/utils.c
 )
 
-# Path CPLEX configurabile
 set(CPLEX_ROOT "" CACHE PATH "Path to CPLEX installation")
+set(CONCORDE_ROOT "" CACHE PATH "Path to Concorde installation")
 
 if (CPLEX_ROOT)
 
@@ -22,7 +22,6 @@ if (CPLEX_ROOT)
 
     target_compile_definitions(unipd_or2_tiberio_serain PRIVATE IL_STD)
 
-    # WINDOWS
     if (WIN32)
 
         target_link_directories(unipd_or2_tiberio_serain PRIVATE
@@ -36,7 +35,6 @@ if (CPLEX_ROOT)
 
     endif ()
 
-    # LINUX
     if (UNIX AND NOT APPLE)
 
         target_link_directories(unipd_or2_tiberio_serain PRIVATE
@@ -53,7 +51,6 @@ if (CPLEX_ROOT)
 
     endif ()
 
-    # macOS
     if (APPLE)
 
         target_link_directories(unipd_or2_tiberio_serain PRIVATE
@@ -69,4 +66,10 @@ if (CPLEX_ROOT)
 
     endif ()
 
+endif ()
+
+if (CONCORDE_ROOT)
+    target_include_directories(unipd_or2_tiberio_serain PRIVATE ${CONCORDE_ROOT})
+    target_link_directories(unipd_or2_tiberio_serain PRIVATE ${CONCORDE_ROOT})
+    target_link_libraries(unipd_or2_tiberio_serain PRIVATE concorde)
 endif ()

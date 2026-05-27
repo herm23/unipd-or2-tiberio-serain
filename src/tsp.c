@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "concorde.h"
 
 //region Plots
 /**
@@ -992,6 +993,23 @@ static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) 
                 }
             }
 
+            // NOTE: Prof suggestion, check code correctness
+            int max_nnz_current_comp = (num_nodes_in_s * (num_nodes_in_s - 1)) / 2;
+
+            if (nnz > max_nnz_current_comp) {
+                char error_msg[256];
+                sprintf(error_msg,
+                        "Critical Error in my_callback_candidate:\n"
+                        "  [Component k]: %d\n"
+                        "  [Nodes in S]: %d\n"
+                        "  [Current nnz]: %d\n"
+                        "  [Max allowed nnz]: %d\n"
+                        "The number of non-zeros exceeds the geometric limit of the component.",
+                        k, num_nodes_in_s, nnz, max_nnz_current_comp);
+
+                print_error_and_die(error_msg);
+            }
+
             if (nnz > 0) {
                 error = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, index, value);
                 if (error) break;
@@ -1012,7 +1030,89 @@ static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) 
 
 //NOTE: Implement fractional solution
 static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst) {
-    return 0;
+    int error = 0;
+
+    double *xstar = (double *) malloc(inst->ncols * sizeof(double));
+    double objval = CPX_INFBOUND;
+
+    if (CPXcallbackgetrelaxationpoint(context, xstar, 0, inst->ncols - 1, &objval)) {
+        free(xstar);
+        return 0;
+    }
+
+    int ecount = 0;
+    for (int i = 0; i < inst->ncols; i++) {
+        if (xstar[i] > 1e-6) ecount++;
+    }
+
+    int *elist = (int *) malloc(2 * ecount * sizeof(int));
+    double *xlist = (double *) malloc(ecount * sizeof(double));
+
+    int edge_idx = 0;
+    for (int i = 0; i < inst->nnodes; i++) {
+        for (int j = i + 1; j < inst->nnodes; j++) {
+            unsigned int idx = index_upper(i, j, inst->nnodes);
+            if (xstar[idx] > 1e-6) {
+                elist[2 * edge_idx]     = i;
+                elist[2 * edge_idx + 1] = j;
+                xlist[edge_idx]         = xstar[idx];
+                edge_idx++;
+            }
+        }
+    }
+
+    int *cut = NULL;
+    int cutcount = 0;
+    double min_cut_val;
+
+    // NOTE: CCcut_mincut richiede i puntatori a cut e cutcount per ritornare il set di nodi del taglio
+    int status = CCcut_mincut(inst->nnodes, ecount, elist, xlist, &min_cut_val, &cut, &cutcount);
+
+    if (status == 0 && min_cut_val < 2.0 - 1e-4 && cutcount >= 2 && cutcount <= inst->nnodes - 2) {
+
+        int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
+        int *index = (int *) malloc(max_nnz * sizeof(int));
+        double *value = (double *) malloc(max_nnz * sizeof(double));
+        int nnz = 0;
+
+        double rhs = (double)cutcount - 1.0;
+        char sense = 'L';
+        int purgeable = CPX_USECUT_FILTER;
+
+        char *in_s = (char *) calloc(inst->nnodes, sizeof(char));
+        for (int i = 0; i < cutcount; i++) {
+            in_s[cut[i]] = 1;
+        }
+
+        for (int i = 0; i < inst->nnodes; i++) {
+            if (!in_s[i]) continue;
+            for (int j = i + 1; j < inst->nnodes; j++) {
+                if (!in_s[j]) continue;
+
+                index[nnz] = index_upper(i, j, inst->nnodes);
+                value[nnz] = 1.0;
+                nnz++;
+            }
+        }
+
+        if (nnz > 0) {
+            int rmatbeg = 0;
+            int local = 0;
+            error = CPXcallbackaddusercuts(context, 1, nnz, &rhs, &sense, &rmatbeg, index, value, &purgeable, &local);
+        }
+
+        free(in_s);
+        free(index);
+        free(value);
+    }
+
+    // NOTE: CC_IFFREE è una macro interna di Concorde per liberare la memoria allocata dalla libreria
+    if (cut) CC_IFFREE(cut, int);
+    free(elist);
+    free(xlist);
+    free(xstar);
+
+    return error;
 }
 
 //NOTE: Callbacks driver
@@ -1034,7 +1134,7 @@ static void TSPopt_callbacks(instance *inst, CPXENVptr env, CPXLPptr lp, double 
     int error = 0;
 
     // Configurazione del contesto per ricevere le Lazy Constraints (Candidati interi)
-    CPXLONG contextid = CPX_CALLBACKCONTEXT_CANDIDATE;
+    CPXLONG contextid = CPX_CALLBACKCONTEXT_CANDIDATE | CPX_CALLBACKCONTEXT_RELAXATION;
 
     if (CPXcallbacksetfunc(env, lp, contextid, my_callback, inst)) {
         print_error_and_die("Error in CPXcallbacksetfunc()");
