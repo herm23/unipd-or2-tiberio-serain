@@ -200,7 +200,7 @@ short optimize(instance *inst) {
             double ratio = 0.1;
             greedy_nn_heuristic(inst, inst->timelimit * ratio, NONE);
 
-            twoOpt_refinement(inst, inst->timelimit, inst->solution, &inst->zbest, &inst->tbest);
+            twoOpt_refinement(inst, inst->timelimit, inst->solution, &inst->zbest, &inst->tbest, 1);
         }
         break;
 

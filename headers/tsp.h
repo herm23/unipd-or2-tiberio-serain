@@ -163,9 +163,10 @@ short extra_mileage_heuristic(instance *inst);
  * @param sol Pointer to the solution array to be refined.
  * @param zbest Pointer to the variable storing the cost of the best solution found.
  * @param tbest Pointer to the variable storing the time when the best solution was found.
- * @return short Returns 0 on success, non-zero if the time limit was exceeded.
+ * @param enable_plot Flag to enable (1) or disable (0) Gnuplot visualizations.
+ * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
-short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest);
+short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest, short enable_plot);
 
 /**
  * @brief Applies the 3-opt kick by swapping 2 parts of the solution array

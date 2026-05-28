@@ -386,7 +386,7 @@ short greedy_nn_heuristic(instance *inst, double time_limit, const enum TSP_REFI
                 //NOTE: Performing vns kicks
                 //2-opt
                 if (inst->verbosity >= DEBUG) printf("\n");
-                short res = twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time);
+                short res = twoOpt_refinement(inst, time_limit, temp_solution, &temp_solution_cost, &curr_time, 1);
                 if (res == -1) {
                     exitStatus = -1;
                     break;
@@ -577,9 +577,10 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
  * @param sol Pointer to the solution array to be refined.
  * @param zbest Pointer to the variable storing the cost of the best solution found.
  * @param tbest Pointer to the variable storing the time when the best solution was found.
+ * @param enable_plot Flag to enable (1) or disable (0) Gnuplot visualizations.
  * @return short Returns 0 on success, 1 if the time limit was exceeded.
  */
-short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest) {
+short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest, short enable_plot) {
     if (inst->verbosity >= DEBUG) printf("\t\t## STARTING twoOpt_refinement\n");
 
     short exitStatus = 0;
@@ -587,40 +588,30 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
     double initial_cost = *zbest;
     double curr_time = second() - inst->tstart;
 
-
     if (inst->verbosity >= DEBUG)
-        printf("\t\t -> 2-opt INIT with cost  %20lf at time %20lf\n", initial_cost,
-               curr_time);
+        printf("\t\t -> 2-opt INIT with cost  %20lf at time %20lf\n", initial_cost, curr_time);
 
     unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
     memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
 
-    plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
-
+    // NOTE: Conditional plotting based on the new parameter
+    if (enable_plot) {
+        plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
+    }
 
     while (1) {
-        // unsigned int *temp_solution = initialize_identity_solution(inst->nnodes);
-        // memcpy(temp_solution, sol, sizeof(unsigned int) * inst->nnodes);
-
-        //NOTE: Print the starting cost (it's redundant for debug)
+        // NOTE: Print the starting cost (it's redundant for debug)
         if (inst->verbosity >= DEBUG)
-            printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost,
-                   curr_time);
+            printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
 
-        //NOTE: Tabu search is already implemented in this step due to parameter definition
+        // NOTE: Tabu search is already implemented in this step due to parameter definition
         double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
-        inst->iterations++; //NOTE: Update iterations after 2-opt !
+        inst->iterations++; // NOTE: Update iterations after 2-opt !
         initial_cost += temp_solution_cost_delta;
         curr_time = second() - inst->tstart;
+
         if (inst->verbosity >= DEBUG)
-            printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost,
-                   curr_time);
-
-        //Debug
-        // if(inst->tenure>0 && temp_solution_cost_delta > 0)
-        //     log_and_check_sol(inst, temp_solution, initial_cost);
-
-        // plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
+            printf("\t\t -> STEP made with new cost %20lf at time %20lf\n", initial_cost, curr_time);
 
         if (initial_cost < *zbest - EPSILON) {
             if (is_solution_valid(inst, temp_solution, initial_cost)) {
@@ -632,16 +623,18 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                 }
             } else {
                 if (inst->verbosity >= SILENT) {
-                    printf(
-                        "------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
+                    printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
+                    free(temp_solution); // NOTE: Free memory before error exit to avoid leaks
                     return -1;
                 }
             }
         }
 
-        plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
+        if (enable_plot) {
+            plot_iteration(inst, initial_cost, *zbest < inst->zbest ? *zbest : inst->zbest, "2opt");
+        }
 
-        //NOTE: If i'm in a local minima and NOT in tabu
+        // NOTE: If i'm in a local minima and NOT in tabu
         if (temp_solution_cost_delta >= -EPSILON && inst->tenure == 0) {
             if (inst->VNS_kick_counter == 0) {
                 free(temp_solution);
@@ -649,13 +642,12 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
             }
             // Vns kick
             for (int i = 0; i < inst->VNS_kick_counter; i++) {
-                //NOTE: If the time is finished we break the cycle and the all refinement prob.
+                // NOTE: If the time is finished we break the cycle and the all refinement prob.
                 int kick_status = vns_kick(inst, inst->timelimit, temp_solution, &initial_cost);
 
-                //Debug
-                // log_and_check_sol(inst, temp_solution, initial_cost);
-
-                plot_iteration(inst, initial_cost, *zbest, "kick");
+                if (enable_plot) {
+                    plot_iteration(inst, initial_cost, *zbest, "kick");
+                }
 
                 if (kick_status == 1)
                     break;
@@ -666,15 +658,16 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
             }
         }
 
-
-        //NOTE: Check the time limit
+        // NOTE: Check the time limit
         if (time_limit != 0 && curr_time > time_limit) {
             exitStatus = 1;
             free(temp_solution);
             break;
         }
 
-        plot_solution(inst, temp_solution, 0, 0);
+        if (enable_plot) {
+            plot_solution(inst, temp_solution, 0, 0);
+        }
     }
     return exitStatus;
 }
@@ -918,7 +911,7 @@ static void TSPopt_benders(instance *inst, CPXENVptr env, CPXLPptr lp, double *x
         build_sol(xstar, inst, succ, comp, ncomp);
 
         //Debug
-        plot_solution_edges(inst, succ);
+        //plot_solution_edges(inst, succ);
 
         if (*ncomp > 1) {
             int *compCounts = (int *)calloc(*ncomp, sizeof(int));
@@ -1014,7 +1007,7 @@ static void post_heuristic_solution(CPXCALLBACKCONTEXTptr context, instance *ins
 
     // NOTE: Apply 2-opt refinement strategy to the patched single tour only if time permits
     if (remaining_time > 0.0) {
-        twoOpt_refinement(inst, remaining_time, sol_perm, &zbest_2opt, &tbest_2opt);
+        twoOpt_refinement(inst, remaining_time, sol_perm, &zbest_2opt, &tbest_2opt,0);
     }
 
     if (inst->verbosity >= DEBUG) {
