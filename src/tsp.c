@@ -21,6 +21,24 @@
 #include <stdbool.h>
 #include "concorde.h"
 
+//TODO: Move the following regions into the utils.c fi
+//region Update Matheuristics-prob
+
+static void update_fixing_probability(double *p, int iteration, instance *inst) {
+    // NOTE: Update every 10 iterations with a uniform distribution between 0.2 and 0.5
+    if (iteration > 0 && iteration % 10 == 0) {
+        double min_p = 0.2;
+        double max_p = 0.5;
+        *p = min_p + ((double)rand() / RAND_MAX) * (max_p - min_p);
+
+        if (inst->verbosity >= INFO) {
+            printf("[Hard-Fixing] Iteration %d: updating probability p to %.3lf\n", iteration, *p);
+        }
+    }
+}
+
+//endregion
+
 //region Data-structure convertions
 
 void succ_to_permutation(int nnodes, const int *succ, unsigned int *sol_perm) {
@@ -1309,6 +1327,138 @@ static void TSPopt_callbacks(instance *inst, CPXENVptr env, CPXLPptr lp, double 
     build_sol(xstar, inst, succ, comp, ncomp);
 }
 
+static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
+    int error = 0;
+    int iteration = 0;
+    double p = 0.5;
+
+    // NOTE: Register the generic callbacks to handle SECs inside the sub-problems
+    CPXLONG contextid = CPX_CALLBACKCONTEXT_CANDIDATE | CPX_CALLBACKCONTEXT_RELAXATION;
+    if (CPXcallbacksetfunc(env, lp, contextid, my_callback, inst)) {
+        print_error_and_die("Error in CPXcallbacksetfunc() inside Hard Fixing");
+    }
+
+    // NOTE: Arrays required for CPXchgbds allocated once outside the loop
+    int *indices_to_change = (int *) malloc(inst->nnodes * sizeof(int));
+    char *lu_bounds = (char *) malloc(inst->nnodes * sizeof(char));
+    double *bd_values = (double *) malloc(inst->nnodes * sizeof(double));
+
+    // NOTE: Allocation for temporary solution extraction inside the loop
+    int *succ = (int *) calloc(inst->nnodes, sizeof(int));
+    int *comp = (int *) calloc(inst->nnodes, sizeof(int));
+    int ncomp = 0;
+    double *xstar = (double *) calloc(inst->ncols, sizeof(double));
+
+    if (inst->verbosity >= INFO) {
+        printf("\n[Hard-Fixing] Starting Matheuristic loop. Global Time Limit: %.2lf s\n", inst->timelimit);
+    }
+
+    // MAIN LOOP: Run until time limit expires
+    while (1) {
+        double elapsed = second() - inst->tstart;
+        double residual_time = inst->timelimit - elapsed;
+
+        if (residual_time <= 0.1) {
+            if (inst->verbosity >= INFO) printf("[Hard-Fixing] Time limit reached. Exiting loop.\n");
+            break;
+        }
+
+        // 1. Update the fixing probability p every 10 iterations
+        update_fixing_probability(&p, iteration, inst);
+
+        // 2. Inject the current incumbent into CPLEX via MIPSTART
+
+        // NOTE: First delete any existing MIP starts from previous iterations to avoid accumulation
+        int num_existing_mipstarts = CPXgetnummipstarts(env, lp);
+        if (num_existing_mipstarts > 0) {
+            CPXdelmipstarts(env, lp, 0, num_existing_mipstarts - 1);
+        }
+
+        double *x_start_clique = (double *) calloc(inst->ncols, sizeof(double));
+        for (int i = 0; i < inst->nnodes; i++) {
+            int curr = inst->solution[i];
+            int next = inst->solution[(i + 1) % inst->nnodes];
+            int idx = index_upper(curr, next, inst->nnodes);
+            x_start_clique[idx] = 1.0;
+        }
+
+        // NOTE: Correct standard C macro is CPX_MIPSTART_AUTO (value 0)
+        int mipstart_effort = CPX_MIPSTART_AUTO;
+        int beg = 0;
+        int *mipstart_ind = (int *) malloc(inst->ncols * sizeof(int));
+        for (int i = 0; i < inst->ncols; i++) mipstart_ind[i] = i;
+
+        CPXaddmipstarts(env, lp, 1, inst->ncols, &beg, mipstart_ind, x_start_clique, &mipstart_effort, NULL);
+        free(mipstart_ind);
+        free(x_start_clique);
+
+        // 3. Fix variables with probability p based on the current permutation
+        int fixed_edges_count = 0;
+        for (int i = 0; i < inst->nnodes; i++) {
+            int curr = inst->solution[i];
+            int next = inst->solution[(i + 1) % inst->nnodes];
+
+            if (((double)rand() / RAND_MAX) < p) {
+                int idx = index_upper(curr, next, inst->nnodes);
+                indices_to_change[fixed_edges_count] = idx;
+                lu_bounds[fixed_edges_count] = 'L';
+                bd_values[fixed_edges_count] = 1.0;
+                fixed_edges_count++;
+            }
+        }
+
+        if (fixed_edges_count > 0) {
+            CPXchgbds(env, lp, fixed_edges_count, indices_to_change, lu_bounds, bd_values);
+        }
+
+        if (inst->verbosity >= DEBUG) {
+            printf("[Hard-Fixing] Iteration %d: Fixed %d edges out of %d. Residual time: %.2lf s\n",
+                   iteration, fixed_edges_count, inst->nnodes, residual_time);
+        }
+
+        // 4. Solve the restricted model with CPLEX
+        CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
+
+        if (CPXmipopt(env, lp)) {
+            if (inst->verbosity >= DEBUG) printf("Warning: CPXmipopt failed or subproblem infeasible at iteration %d.\n", iteration);
+        } else {
+            // 5. If CPLEX found a solution, extract it and check for improvements
+            if (!CPXgetx(env, lp, xstar, 0, inst->ncols - 1)) {
+                build_sol(xstar, inst, succ, comp, &ncomp);
+
+                double sub_objval;
+                CPXgetobjval(env, lp, &sub_objval);
+
+                if (sub_objval < inst->zbest) {
+                    inst->zbest = sub_objval;
+                    succ_to_permutation(inst->nnodes, succ, inst->solution);
+                    if (inst->verbosity >= INFO) {
+                        printf("[Hard-Fixing] New global incumbent found! Cost: %.2lf at time %.2lf s\n", sub_objval, second() - inst->tstart);
+                    }
+                }
+            }
+        }
+
+        // 6. Unfix all variables (Restore lower bounds back to 0.0)
+        if (fixed_edges_count > 0) {
+            for (int i = 0; i < fixed_edges_count; i++) {
+                bd_values[i] = 0.0;
+            }
+            CPXchgbds(env, lp, fixed_edges_count, indices_to_change, lu_bounds, bd_values);
+        }
+
+        iteration++;
+    }
+
+    // NOTE: Clean up allocations
+    free(indices_to_change);
+    free(lu_bounds);
+    free(bd_values);
+    free(succ);
+    free(comp);
+    free(xstar);
+}
+
 int TSPopt(instance *inst, enum CPLEX_MODE mode) {
     int error = 0;
 
@@ -1327,72 +1477,98 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
     }
 
     build_model(inst, env, lp);
-
-    int *succ = (int *) calloc(inst->nnodes, sizeof(int));
-    int *comp = (int *) calloc(inst->nnodes, sizeof(int));
     inst->ncols = CPXgetnumcols(env, lp);
-    double *xstar = (double *) calloc(inst->ncols, sizeof(double));
+
+    // NOTE: Memory allocation and post-processing variables
+    int *succ = NULL;
+    int *comp = NULL;
     int ncomp = 0;
 
-    int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
-    int *index = (int *) calloc(max_nnz, sizeof(int));
-    double *value = (double *) calloc(max_nnz, sizeof(double));
-
-    char **cname = (char **) calloc(1, sizeof(char *));
-    cname[0] = (char *) calloc(100, sizeof(char));
-
     switch (mode) {
-        case BENDERS_LOOP:
-            TSPopt_benders(inst, env, lp, xstar, succ, comp, &ncomp, index, value, cname);
-            break;
+        case BENDERS_LOOP: {
+            // NOTE: Allocate memory exclusively needed for Benders Loop
+            succ = (int *) calloc(inst->nnodes, sizeof(int));
+            comp = (int *) calloc(inst->nnodes, sizeof(int));
+            double *xstar = (double *) calloc(inst->ncols, sizeof(double));
 
-        case CALLBACKS:
-            TSPopt_callbacks(inst, env, lp, xstar, succ, comp, &ncomp);
+            int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
+            int *index = (int *) calloc(max_nnz, sizeof(int));
+            double *value = (double *) calloc(max_nnz, sizeof(double));
+
+            char **cname = (char **) calloc(1, sizeof(char *));
+            cname[0] = (char *) calloc(100, sizeof(char));
+
+            TSPopt_benders(inst, env, lp, xstar, succ, comp, &ncomp, index, value, cname);
+
+            // NOTE: Free memory immediately after method execution
+            free(cname[0]);
+            free(cname);
+            free(index);
+            free(value);
+            free(xstar);
             break;
+        }
+
+        case CALLBACKS: {
+            // NOTE: Allocate memory exclusively needed for generic Callbacks
+            succ = (int *) calloc(inst->nnodes, sizeof(int));
+            comp = (int *) calloc(inst->nnodes, sizeof(int));
+            double *xstar = (double *) calloc(inst->ncols, sizeof(double));
+
+            TSPopt_callbacks(inst, env, lp, xstar, succ, comp, &ncomp);
+
+            free(xstar);
+            break;
+        }
+
+        case HARD_FIXING: {
+            // TODO: Call your 2-opt initialization method here to populate inst->solution and inst->zbest before starting
+            // e.g., build_2opt_initial_solution(inst);
+
+            TSPopt_hard_fixing(inst, env, lp);
+            break;
+        }
 
         default:
             print_error_and_die("Unknown CPLEX mode selected.");
     }
 
-    //NOTE: Managing time expiration or sub-optimal termination (Valid for both modes)
-    if (ncomp > 1) {
-
-        //WARNING: Check if succ contains a valid composition of nodes
-        int is_succ_all_zeros = 1;
-        for (int i = 0; i < inst->nnodes; i++) {
-            if (succ[i] != 0) {
-                is_succ_all_zeros = 0;
-                break;
+    // NOTE: Post-processing and cleanup (Only for exact/heuristic methods that populate succ and ncomp)
+    if (mode == BENDERS_LOOP || mode == CALLBACKS) {
+        if (ncomp > 1) {
+            // WARNING: Check if succ contains a valid composition of nodes
+            int is_succ_all_zeros = 1;
+            for (int i = 0; i < inst->nnodes; i++) {
+                if (succ[i] != 0) {
+                    is_succ_all_zeros = 0;
+                    break;
+                }
             }
+
+            if (is_succ_all_zeros) {
+                print_error_and_die("Error: CPLEX execution was interrupted before finding any solution. 'succ' array is uninitialized.");
+            }
+
+            // NOTE: Apply patching heuristic and update zbest inside the method
+            apply_patching(inst, succ, comp, &ncomp, &(inst->zbest));
+
+        } else {
+            double objval;
+            if (CPXgetobjval(env, lp, &objval)) {
+                char errmsg[CPXMESSAGEBUFSIZE];
+                CPXgeterrorstring(env, error, errmsg);
+                print_error_and_die(errmsg);
+            }
+            inst->zbest = objval;
         }
 
-        if (is_succ_all_zeros) {
-            print_error_and_die("Error: CPLEX execution was interrupted (e.g., time limit expired during breakpoint) before finding any solution. 'succ' array is uninitialized.");
-        }
+        // NOTE: Convert from successor array to the final instance permutation solution
+        succ_to_permutation(inst->nnodes, succ, inst->solution);
 
-        // NOTE: Apply patching heuristic and update zbest inside the method
-        apply_patching(inst, succ, comp, &ncomp, &(inst->zbest));
-
-    } else {
-        double objval;
-        if (CPXgetobjval(env, lp, &objval)) {
-            char errmsg[CPXMESSAGEBUFSIZE];
-            CPXgeterrorstring(env, error, errmsg);
-            print_error_and_die(errmsg);
-        }
-        inst->zbest = objval;
+        // NOTE: Final clean up for exact methods arrays
+        free(succ);
+        free(comp);
     }
-
-    // NOTE: Convert from successor array to the final instance permutation solution
-    succ_to_permutation(inst->nnodes, succ, inst->solution);
-
-    free(cname[0]);
-    free(cname);
-    free(index);
-    free(value);
-    free(succ);
-    free(comp);
-    free(xstar);
 
     CPXfreeprob(env, &lp);
     CPXcloseCPLEX(&env);
