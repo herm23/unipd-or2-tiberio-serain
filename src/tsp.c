@@ -21,6 +21,26 @@
 #include <stdbool.h>
 #include "concorde.h"
 
+//region Data-structure convertions
+
+void succ_to_permutation(int nnodes, const int *succ, unsigned int *sol_perm) {
+    int currNode = 0;
+    for (int i = 0; i < nnodes; i++) {
+        sol_perm[i] = (unsigned int) succ[currNode];
+        currNode = succ[currNode];
+    }
+}
+
+void permutation_to_succ(int nnodes, const unsigned int *sol_perm, int *succ) {
+    for (int i = 0; i < nnodes; i++) {
+        unsigned int u = sol_perm[i];
+        unsigned int v = sol_perm[(i + 1) % nnodes];
+        succ[u] = (int) v;
+    }
+}
+
+//endregion
+
 //region Plots
 /**
  * @brief Plots the solution using gnuplot.
@@ -800,7 +820,7 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
 }
 
 
-void apply_patching(instance *inst, int *succ, int *comp, int *ncomp) {
+void apply_patching(instance *inst, int *succ, int *comp, int *ncomp, double *obj) {
     if (*ncomp <= 1) return;
 
     if (inst->verbosity >= INFO) {
@@ -838,17 +858,22 @@ void apply_patching(instance *inst, int *succ, int *comp, int *ncomp) {
             succ[best_i] = old_next_j;
             succ[best_j] = old_next_i;
 
+            // NOTE: Update the objective function value directly with the best delta found
+            *obj += best_delta;
+
             int comp_to_replace = comp[best_j];
             int new_comp_label = comp[best_i];
             for (int k = 0; k < inst->nnodes; k++) {
                 if (comp[k] == comp_to_replace) comp[k] = new_comp_label;
             }
             (*ncomp)--;
+        } else {
+            break; // NOTE: Safety guard against infinite loops
         }
     }
 
     if (inst->verbosity >= INFO) {
-        printf("[Patching] Finished patching heuristic");
+        printf("[Patching] Finished patching heuristic\n");
     }
 }
 
@@ -940,13 +965,183 @@ static void TSPopt_benders(instance *inst, CPXENVptr env, CPXLPptr lp, double *x
 }
 
 //Callback for integer candidates
+static void post_heuristic_solution(CPXCALLBACKCONTEXTptr context, instance *inst, const int *succ, const int *comp, int ncomp, double objval) {
+    if (inst->verbosity >= DEBUG) {
+        printf("\n[DEBUG-HEUR] Entering post_heuristic_solution with ncomp = %d, current objval = %.2lf\n", ncomp, objval);
+    }
+
+    // NOTE: Patching heuristic integration
+    int *succ_patched = (int *) malloc(inst->nnodes * sizeof(int));
+    int *comp_patched = (int *) malloc(inst->nnodes * sizeof(int));
+    for (int i = 0; i < inst->nnodes; i++) {
+        succ_patched[i] = succ[i];
+        comp_patched[i] = comp[i]; // NOTE: Deep copy of the actual components found by build_sol
+    }
+    int ncomp_patched = ncomp;
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] Starting apply_patching...\n");
+    }
+
+    // NOTE: Setup current objective value and update it directly during patching
+    double zbest_2opt = objval;
+    apply_patching(inst, succ_patched, comp_patched, &ncomp_patched, &zbest_2opt);
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] Finished apply_patching. Remaining components: %d, Patched cost: %.2lf\n", ncomp_patched, zbest_2opt);
+        printf("[DEBUG-HEUR] Starting succ_to_permutation...\n");
+    }
+
+    // NOTE: Convert from successor array to permutation array
+    unsigned int *sol_perm = (unsigned int *) malloc(inst->nnodes * sizeof(unsigned int));
+    succ_to_permutation(inst->nnodes, succ_patched, sol_perm);
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] Finished succ_to_permutation.\n");
+    }
+
+    // NOTE: Dynamic calculation of residual time limit inside the callback
+    double elapsed = second() - inst->tstart;
+    double remaining_time = inst->timelimit - elapsed;
+    if (remaining_time < 0) remaining_time = 0.0;
+
+    double tbest_2opt = elapsed;
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] Time elapsed: %.2lf, Remaining time: %.2lf\n", elapsed, remaining_time);
+        printf("[DEBUG-HEUR] Starting twoOpt_refinement...\n");
+    }
+
+    // NOTE: Apply 2-opt refinement strategy to the patched single tour only if time permits
+    if (remaining_time > 0.0) {
+        twoOpt_refinement(inst, remaining_time, sol_perm, &zbest_2opt, &tbest_2opt);
+    }
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] Finished twoOpt_refinement. Refined cost (zbest_2opt): %.2lf\n", zbest_2opt);
+        printf("[DEBUG-HEUR] Starting permutation_to_succ...\n");
+    }
+
+    // NOTE: Convert back from permutation array to successor array
+    permutation_to_succ(inst->nnodes, sol_perm, succ_patched);
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] Finished permutation_to_succ. Building xheu...\n");
+    }
+
+    double *xheu = (double *) calloc(inst->ncols, sizeof(double));
+    double objheu = 0.0;
+
+    for (int i = 0; i < inst->nnodes; i++) {
+        int j = succ_patched[i];
+        int idx = index_upper(i, j, inst->nnodes);
+        xheu[idx] = 1.0;
+        objheu += get_precalculated_distance(inst, i, j);
+    }
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] xheu built. Recalculated cost (objheu): %.2lf\n", objheu);
+    }
+
+    if (objheu < CPX_INFBOUND) {
+        int *ind = (int *) malloc(inst->ncols * sizeof(int));
+        for (int j = 0; j < inst->ncols; j++) ind[j] = j;
+
+        if (inst->verbosity >= DEBUG) {
+            printf("[DEBUG-HEUR] Attempting CPXcallbackpostheursoln...\n");
+        }
+
+        if (CPXcallbackpostheursoln(context, inst->ncols, ind, xheu, objheu, CPXCALLBACKSOLUTION_NOCHECK)) {
+            print_error_and_die("CPXcallbackpostheursoln() error");
+        } else {
+            if (inst->verbosity >= INFO) {
+                printf("[CPLEX Callback] Successfully posted heuristic solution! Cost: %.2lf\n", objheu);
+            }
+        }
+
+        free(ind);
+    }
+
+    if (inst->verbosity >= DEBUG) {
+        printf("[DEBUG-HEUR] Freeing memory and exiting post_heuristic_solution.\n\n");
+    }
+
+    free(xheu);
+    free(sol_perm);
+    free(succ_patched);
+    free(comp_patched);
+}
+
+static int add_subtour_elimination_constraints(CPXCALLBACKCONTEXTptr context, instance *inst, const int *comp, int ncomp) {
+    int error = 0;
+
+    int *compCounts = (int *) calloc(ncomp, sizeof(int));
+    for (int i = 0; i < inst->nnodes; i++) {
+        compCounts[comp[i] - 1]++;
+    }
+
+    int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
+    int *index = (int *) malloc(max_nnz * sizeof(int));
+    double *value = (double *) malloc(max_nnz * sizeof(double));
+    int izero = 0;
+
+    for (int k = 0; k < ncomp; k++) {
+        int nnz = 0;
+        int num_nodes_in_s = compCounts[k];
+
+        if (num_nodes_in_s >= inst->nnodes) continue;
+
+        double rhs = (double)num_nodes_in_s - 1.0;
+        char sense = 'L';
+
+        for (int i = 0; i < inst->nnodes; i++) {
+            if (comp[i] - 1 != k) continue;
+
+            for (int j = i + 1; j < inst->nnodes; j++) {
+                if (comp[j] - 1 != k) continue;
+
+                index[nnz] = index_upper(i, j, inst->nnodes);
+                value[nnz] = 1.0;
+                nnz++;
+            }
+        }
+
+        int max_nnz_current_comp = (num_nodes_in_s * (num_nodes_in_s - 1)) / 2;
+
+        if (nnz > max_nnz_current_comp) {
+            char error_msg[256];
+            sprintf(error_msg,
+                    "Critical Error in add_subtour_elimination_constraints:\n"
+                    "  [Component k]: %d\n"
+                    "  [Nodes in S]: %d\n"
+                    "  [Current nnz]: %d\n"
+                    "  [Max allowed nnz]: %d\n"
+                    "The number of non-zeros exceeds the geometric limit of the component.",
+                    k, num_nodes_in_s, nnz, max_nnz_current_comp);
+
+            print_error_and_die(error_msg);
+        }
+
+        if (nnz > 0) {
+            error = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, index, value);
+            if (error) break;
+        }
+    }
+
+    free(index);
+    free(value);
+    free(compCounts);
+
+    return error;
+}
+
 static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) {
     int error = 0;
 
     double *xstar = (double *) malloc(inst->ncols * sizeof(double));
     double objval = CPX_INFBOUND;
 
-    //NOTE: Get xstar from cplex
+    // NOTE: Get xstar from cplex
     if (CPXcallbackgetcandidatepoint(context, xstar, 0, inst->ncols - 1, &objval)) {
         free(xstar);
         return 1;
@@ -958,67 +1153,12 @@ static int my_callback_candidate(CPXCALLBACKCONTEXTptr context, instance *inst) 
 
     build_sol(xstar, inst, succ, comp, &ncomp);
 
-    //Debug
-    //plot_solution_edges(inst, succ);
-
     if (ncomp > 1) {
-        int *compCounts = (int *) calloc(ncomp, sizeof(int));
-        for (int i = 0; i < inst->nnodes; i++) {
-            compCounts[comp[i] - 1]++;
-        }
+        // NOTE: Run and post the heuristic solution first
+        post_heuristic_solution(context, inst, succ, comp, ncomp, objval);
 
-        int max_nnz = (inst->nnodes * (inst->nnodes - 1)) / 2;
-        int *index = (int *) malloc(max_nnz * sizeof(int));
-        double *value = (double *) malloc(max_nnz * sizeof(double));
-        int izero = 0;
-
-        for (int k = 0; k < ncomp; k++) {
-            int nnz = 0;
-            int num_nodes_in_s = compCounts[k];
-
-            if (num_nodes_in_s >= inst->nnodes) continue;
-
-            double rhs = (double)num_nodes_in_s - 1.0;
-            char sense = 'L';
-
-            for (int i = 0; i < inst->nnodes; i++) {
-                if (comp[i] - 1 != k) continue;
-
-                for (int j = i + 1; j < inst->nnodes; j++) {
-                    if (comp[j] - 1 != k) continue;
-
-                    index[nnz] = index_upper(i, j, inst->nnodes);
-                    value[nnz] = 1.0;
-                    nnz++;
-                }
-            }
-
-            // NOTE: Prof suggestion, check code correctness
-            int max_nnz_current_comp = (num_nodes_in_s * (num_nodes_in_s - 1)) / 2;
-
-            if (nnz > max_nnz_current_comp) {
-                char error_msg[256];
-                sprintf(error_msg,
-                        "Critical Error in my_callback_candidate:\n"
-                        "  [Component k]: %d\n"
-                        "  [Nodes in S]: %d\n"
-                        "  [Current nnz]: %d\n"
-                        "  [Max allowed nnz]: %d\n"
-                        "The number of non-zeros exceeds the geometric limit of the component.",
-                        k, num_nodes_in_s, nnz, max_nnz_current_comp);
-
-                print_error_and_die(error_msg);
-            }
-
-            if (nnz > 0) {
-                error = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, index, value);
-                if (error) break;
-            }
-        }
-
-        free(index);
-        free(value);
-        free(compCounts);
+        // NOTE: Execute the usual SEC cuts to reject the current invalid candidate
+        error = add_subtour_elimination_constraints(context, inst, comp, ncomp);
     }
 
     free(succ);
@@ -1238,13 +1378,9 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
             print_error_and_die("Error: CPLEX execution was interrupted (e.g., time limit expired during breakpoint) before finding any solution. 'succ' array is uninitialized.");
         }
 
-        apply_patching(inst, succ, comp, &ncomp);
+        // NOTE: Apply patching heuristic and update zbest inside the method
+        apply_patching(inst, succ, comp, &ncomp, &(inst->zbest));
 
-        double manual_obj = 0;
-        for (int i = 0; i < inst->nnodes; i++) {
-            manual_obj += get_precalculated_distance(inst, i, succ[i]);
-        }
-        inst->zbest = manual_obj;
     } else {
         double objval;
         if (CPXgetobjval(env, lp, &objval)) {
