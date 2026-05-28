@@ -1391,12 +1391,8 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
         inst->zbest = objval;
     }
 
-    //NOTE: Build the final solution before leaving
-    int currNode = 0;
-    for (int i = 0; i < inst->nnodes; i++) {
-        inst->solution[i] = succ[currNode];
-        currNode = succ[currNode];
-    }
+    // NOTE: Convert from successor array to the final instance permutation solution
+    succ_to_permutation(inst->nnodes, succ, inst->solution);
 
     free(cname[0]);
     free(cname);
