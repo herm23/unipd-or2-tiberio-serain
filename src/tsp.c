@@ -1341,7 +1341,6 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
     char **cname = (char **) calloc(1, sizeof(char *));
     cname[0] = (char *) calloc(100, sizeof(char));
 
-    // Gestione del flusso tramite lo switch dell'enumeratore richiesto
     switch (mode) {
         case BENDERS_LOOP:
             TSPopt_benders(inst, env, lp, xstar, succ, comp, &ncomp, index, value, cname);
