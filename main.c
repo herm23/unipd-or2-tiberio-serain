@@ -210,7 +210,7 @@ short optimize(instance *inst) {
 
         case CPLEX:
             //TODO: External param ?
-            enum CPLEX_MODE mode = HARD_FIXING;
+            enum CPLEX_MODE mode = CALLBACKS;
             TSPopt(inst, mode);
             break;
 

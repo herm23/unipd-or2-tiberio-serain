@@ -879,6 +879,7 @@ void apply_patching(instance *inst, int *succ, int *comp, int *ncomp, double *ob
             }
             (*ncomp)--;
         } else {
+            print_error_and_die("[Patching] No more components found!\n");
             break; // NOTE: Safety guard against infinite loops
         }
     }
@@ -903,7 +904,7 @@ static void TSPopt_benders(instance *inst, CPXENVptr env, CPXLPptr lp, double *x
         CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
 
         if (inst->verbosity >= DEBUG) {
-            printf("\n--- Starting SEC iteration %d ---\n", secCount + 1);
+            printf("\n--- Starting SEC iteration with existing: %d SECs---\n", secCount);
             printf("Elapsed time: %.2f s | Residual time: %.2f s\n", elapsed, residual_time);
         }
 
@@ -1564,6 +1565,8 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
 
         // NOTE: Convert from successor array to the final instance permutation solution
         succ_to_permutation(inst->nnodes, succ, inst->solution);
+        inst->zbest = calculate_solution_cost(inst, inst->solution);
+        //TODO: Update tbest
 
         // NOTE: Final clean up for exact methods arrays
         free(succ);
