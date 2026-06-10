@@ -70,7 +70,13 @@ void print_array(int *array, int size) {
  * @param inst Pointer to the instance structure.
  */
 void init_distances(instance *inst) {
-    inst->distances = malloc(inst->nnodes * inst->nnodes * sizeof(double)); //TODO fix this
+    // M1 fix: only the upper triangle is ever indexed (max index n(n-1)/2 - 1), so allocate
+    // n(n-1)/2 doubles instead of n^2 (~2x saving), using size_t to avoid int overflow for large n.
+    // M4: guard the allocation result.
+    size_t n = (size_t) inst->nnodes;
+    size_t count = n * (n - 1) / 2;
+    inst->distances = malloc(count * sizeof(double));
+    if (count > 0 && inst->distances == NULL) print_error_and_die("init_distances: out of memory");
     for (int i = 0; i < inst->nnodes; i++) {
         for (int j = i + 1; j < inst->nnodes; j++) {
             set_precalculated_distance(inst, i, j, calculate_distance(i, j, inst));
@@ -149,16 +155,20 @@ double rand_0_1() {
  * @param inst Pointer to the instance structure to be freed.
  */
 void free_instance(instance *inst) {
-    free(inst->xcoord);
-    free(inst->ycoord);
-    free(inst->distances);
-    free(inst->solution);
-    free(inst->tabulist);
-    if (inst->plot)
+    // M5 fix: null out pointers after freeing so an accidental second free_instance() is a no-op.
+    free(inst->xcoord);    inst->xcoord = NULL;
+    free(inst->ycoord);    inst->ycoord = NULL;
+    free(inst->distances); inst->distances = NULL;
+    free(inst->solution);  inst->solution = NULL;
+    free(inst->tabulist);  inst->tabulist = NULL;
+    if (inst->plot) {
         pclose(inst->plot);
-
-    if (inst->cost_plot)
+        inst->plot = NULL;
+    }
+    if (inst->cost_plot) {
         fclose(inst->cost_plot);
+        inst->cost_plot = NULL;
+    }
 }
 
 //endregion MEMORY MANAGEMENT

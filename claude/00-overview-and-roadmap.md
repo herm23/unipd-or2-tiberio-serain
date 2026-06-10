@@ -27,6 +27,8 @@ Owner decisions that shape the work:
 | `03-memory-audit.md` | 3 | alloc↔free table, leaks, lifecycle. |
 | `04-hardfixing-review.md` | 4 | Theoretical correctness of hard-fixing. |
 | `05-local-branching.md` | 5 | Design + implementation notes (task 5). |
+| `06-verification.md` | — | Re-verification of every 00–05 point against the current code. |
+| `07-methods-correctness-audit.md` | 7 | Theory + implementation correctness of ALL methods, with cross-validation. |
 
 ## Architecture map
 

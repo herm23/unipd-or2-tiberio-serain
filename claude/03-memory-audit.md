@@ -1,6 +1,23 @@
-# Task 3 — Memory Audit (report only)
+# Task 3 — Memory Audit
 
-Goal: enumerate allocations, pair them with frees, identify leaks and lifecycle issues. **No fixes applied.**
+Goal: enumerate allocations, pair them with frees, identify leaks and lifecycle issues.
+
+## ✅ FIX STATUS — applied and verified
+
+| ID | Fix applied | Verification |
+|----|-------------|--------------|
+| M1 | `init_distances` now allocates `n(n-1)/2` doubles (not `n²`) using `size_t` (no int overflow) | valid tours at n=50/500/1000 — the halved buffer indexes correctly |
+| M3 | hard-fixing `x_start_clique`/`mipstart_ind` hoisted out of the loop (alloc once, `memset` per iter) | hard-fixing reaches optimum; `0 leaked bytes` |
+| M4 | NULL-check added on the `init_distances` allocation (the largest/riskiest) | — (other call sites left documented) |
+| M5 | `free_instance` nulls each pointer after `free`/`pclose`/`fclose` | no double-free window |
+| M2 | env/lp on the init-error path already closed via the C6 fix; the remaining buffer leaks are on `print_error_and_die` (process-exit) paths — **left documented**, not chased | — |
+| M6 | possible `malloc(0)` in the relaxation cut already guarded by the **C10** fix | — |
+
+**Result:** distance matrix uses half the memory and is overflow-safe; no per-iteration alloc churn in
+hard-fixing; clean teardown. `leaks --atExit` reports **0 leaked bytes** on the heuristic, hard-fixing, and
+benders paths. No steady-state leak existed before and none was introduced.
+
+The per-finding write-ups below are retained for rationale.
 
 Overall the code is **disciplined about freeing** — the great majority of allocations have a matching `free` on
 all normal paths. The issues below are (a) one genuine over-allocation, (b) leaks only on `print_error_and_die`

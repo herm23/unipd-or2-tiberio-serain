@@ -1387,6 +1387,12 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
     int ncomp = 0;
     double *xstar = (double *) calloc(inst->ncols, sizeof(double));
 
+    // M3 fix: hoist the fixed-size MIP-start buffers out of the loop (were alloc/free'd every iteration).
+    // mipstart_ind is the constant column list 0..ncols-1; x_start_clique is rebuilt (memset) each iteration.
+    double *x_start_clique = (double *) calloc(inst->ncols, sizeof(double));
+    int *mipstart_ind = (int *) malloc(inst->ncols * sizeof(int));
+    for (int i = 0; i < inst->ncols; i++) mipstart_ind[i] = i;
+
     if (inst->verbosity >= INFO) {
         printf("\n[Hard-Fixing] Starting Matheuristic loop. Global Time Limit: %.2lf s\n", inst->timelimit);
     }
@@ -1411,7 +1417,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
             CPXdelmipstarts(env, lp, 0, num_existing_mipstarts - 1);
         }
 
-        double *x_start_clique = (double *) calloc(inst->ncols, sizeof(double));
+        memset(x_start_clique, 0, inst->ncols * sizeof(double)); // M3: reset the hoisted buffer
         for (int i = 0; i < inst->nnodes; i++) {
             int curr = inst->solution[i];
             int next = inst->solution[(i + 1) % inst->nnodes];
@@ -1422,12 +1428,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
         // NOTE: Correct standard C macro is CPX_MIPSTART_AUTO (value 0)
         int mipstart_effort = CPX_MIPSTART_AUTO;
         int beg = 0;
-        int *mipstart_ind = (int *) malloc(inst->ncols * sizeof(int));
-        for (int i = 0; i < inst->ncols; i++) mipstart_ind[i] = i;
-
         CPXaddmipstarts(env, lp, 1, inst->ncols, &beg, mipstart_ind, x_start_clique, &mipstart_effort, NULL);
-        free(mipstart_ind);
-        free(x_start_clique);
 
         // 3. Fix variables with probability p based on the current permutation
         int fixed_edges_count = 0;
@@ -1503,6 +1504,8 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
     free(succ);
     free(comp);
     free(xstar);
+    free(x_start_clique); // M3: hoisted MIP-start buffers freed once
+    free(mipstart_ind);
 }
 
 // region Local Branching (matheuristic)
