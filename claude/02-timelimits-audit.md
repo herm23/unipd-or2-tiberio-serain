@@ -1,6 +1,25 @@
-# Task 2 — Time-Limit Audit (report only)
+# Task 2 — Time-Limit Audit
 
-Goal: verify every timer and time-budget is correct and consistent. **No fixes applied.**
+Goal: verify every timer and time-budget is correct and consistent.
+
+## ✅ FIX STATUS — applied and verified
+
+| ID | Fix applied | Verification |
+|----|-------------|--------------|
+| T1 | `vns_kick` now gets the refinement's local `time_limit`, not `inst->timelimit` (`tsp.c`) | VNS run (model 3) stops exactly at the 5 s limit |
+| T2 | hard-fixing now caps each restricted MIP (`~timelimit/10`, 1 s floor) instead of the whole residual | n=200/12 s now does **10 dives** (was ~1) |
+| T4 | added `time_left(inst)` helper + `TIME_EPS`; benders/callbacks/hard-fixing now share one residual convention | all modes valid, converge to optimum |
+| T5 | `inst->tbest` set on accept for hard-fixing and in benders/callbacks post-processing | tbest now realistic: callbacks 0.27 s, benders 0.27 s, hard-fixing 1.32 s (was bogus ~27000) |
+| T3 | **not changed** (deliberate): per-iteration granularity, not a correctness bug; an in-scan check would require restructuring the O(n²) 2-opt scan | — |
+| T6 | **no change needed**: construction/refinement split was already correct (residual by shared `tstart`) | — |
+| Win | `second()` on Windows uses CPU time — **left documented**, not changed (cannot test here; would need `QueryPerformanceCounter`) | — |
+
+**Result:** time budgets are now respected consistently; matheuristics dive repeatedly; reported `tbest` is
+meaningful for every mode. Local branching already used a per-iteration cap and correct `tbest`, so it was
+unaffected. (Local branching keeps its own `LB_TIME_EPS`/cap; the new `time_left`/`TIME_EPS` are shared by the
+other modes.)
+
+The per-finding write-ups below are retained for rationale.
 
 ## Timing primitive
 

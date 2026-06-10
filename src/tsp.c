@@ -22,6 +22,19 @@
 #include "concorde.h"
 
 //TODO: Move the following regions into the utils.c fi
+
+//region Time budget (T4 fix: single source of truth for the residual time)
+
+#define TIME_EPS 0.1 // stop handing CPLEX time when fewer than this many seconds remain
+
+// Remaining wall-clock budget (seconds) before the global time limit; clamped to >= 0.
+static double time_left(const instance *inst) {
+    double r = inst->timelimit - (second() - inst->tstart);
+    return r > 0.0 ? r : 0.0;
+}
+
+//endregion
+
 //region Update Matheuristics-prob
 
 static void update_fixing_probability(double *p, int iteration, instance *inst) {
@@ -674,7 +687,8 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
             // Vns kick
             for (int i = 0; i < inst->VNS_kick_counter; i++) {
                 // NOTE: If the time is finished we break the cycle and the all refinement prob.
-                int kick_status = vns_kick(inst, inst->timelimit, temp_solution, &initial_cost);
+                // T1 fix: pass this refinement's own budget, not the global inst->timelimit.
+                int kick_status = vns_kick(inst, time_limit, temp_solution, &initial_cost);
 
                 if (enable_plot) {
                     plot_iteration(inst, initial_cost, *zbest, "kick");
@@ -910,9 +924,9 @@ static void TSPopt_benders(instance *inst, CPXENVptr env, CPXLPptr lp, double *x
 
     do {
         double elapsed = second() - inst->tstart;
-        double residual_time = inst->timelimit - elapsed;
+        double residual_time = time_left(inst); // T4 fix: shared residual helper + TIME_EPS guard
 
-        if (residual_time <= 0) break;
+        if (residual_time <= TIME_EPS) break;
 
         CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
 
@@ -1322,9 +1336,7 @@ static void TSPopt_callbacks(instance *inst, CPXENVptr env, CPXLPptr lp, double 
     CPXsetintparam(env, CPX_PARAM_THREADS, 1);
 
     // Calcolo e impostazione del time limit residuo iniziale
-    double elapsed = second() - inst->tstart;
-    double residual_time = inst->timelimit - elapsed;
-    if (residual_time < 0) residual_time = 0.0;
+    double residual_time = time_left(inst); // T4 fix: shared residual helper (already clamped >= 0)
 
     CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
 
@@ -1381,10 +1393,9 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
 
     // MAIN LOOP: Run until time limit expires
     while (1) {
-        double elapsed = second() - inst->tstart;
-        double residual_time = inst->timelimit - elapsed;
+        double residual_time = time_left(inst); // T4 fix: shared residual helper + TIME_EPS guard
 
-        if (residual_time <= 0.1) {
+        if (residual_time <= TIME_EPS) {
             if (inst->verbosity >= INFO) printf("[Hard-Fixing] Time limit reached. Exiting loop.\n");
             break;
         }
@@ -1442,8 +1453,16 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
                    iteration, fixed_edges_count, inst->nnodes, residual_time);
         }
 
-        // 4. Solve the restricted model with CPLEX
-        CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
+        // 4. Solve the restricted model with CPLEX.
+        // T2 fix: bound each restricted MIP's time (aim for ~10 dives over a finite budget, 1s floor)
+        // instead of handing the whole residual to a single solve.
+        double per_iter = residual_time;
+        if (inst->timelimit < 1e15) {
+            double cap = inst->timelimit / 10.0;
+            if (cap < per_iter) per_iter = cap;
+        }
+        if (per_iter < 1.0 && residual_time > 1.0) per_iter = 1.0;
+        CPXsetdblparam(env, CPX_PARAM_TILIM, per_iter);
 
         if (CPXmipopt(env, lp)) {
             if (inst->verbosity >= DEBUG) printf("Warning: CPXmipopt failed or subproblem infeasible at iteration %d.\n", iteration);
@@ -1457,6 +1476,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
 
                 if (sub_objval < inst->zbest) {
                     inst->zbest = sub_objval;
+                    inst->tbest = second() - inst->tstart; // T5 fix: record time of best
                     succ_to_permutation(inst->nnodes, succ, inst->solution);
                     if (inst->verbosity >= INFO) {
                         printf("[Hard-Fixing] New global incumbent found! Cost: %.2lf at time %.2lf s\n", sub_objval, second() - inst->tstart);
@@ -1795,7 +1815,7 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
         // NOTE: Convert from successor array to the final instance permutation solution
         succ_to_permutation(inst->nnodes, succ, inst->solution);
         inst->zbest = calculate_solution_cost(inst, inst->solution);
-        //TODO: Update tbest
+        inst->tbest = second() - inst->tstart; // T5 fix: record time of best for benders/callbacks
 
         // NOTE: Final clean up for exact methods arrays
         free(succ);
