@@ -244,6 +244,7 @@ void print_tsp_strategies() {
 void parse_command_line(int argc, char **argv, instance *inst) {
     // default
     inst->zbest = -1;
+    inst->nnodes = 0; // C9 fix: explicit default so file-input runs don't see garbage as "random params"
     inst->model_type = 0;
     strcpy(inst->input_file, "NULL");
     strcpy(inst->out_file, "NULL");
@@ -474,9 +475,12 @@ void parse_tsp_file(instance *inst) {
 
         if (strncmp(par_name, "EDGE_WEIGHT_TYPE", 16) == 0) {
             token1 = strtok(NULL, " :");
-            if (strncmp(token1, "ATT", 3) != 0)
+            // C7 fix: the distance code computes nearest-integer Euclidean (EUC_2D). Accept both EUC_2D
+            // (matches the math exactly) and ATT (treated as the same Euclidean approximation) instead of
+            // rejecting EUC_2D files outright.
+            if (strncmp(token1, "ATT", 3) != 0 && strncmp(token1, "EUC_2D", 6) != 0)
                 print_error_and_die(
-                    " format error:  only EDGE_WEIGHT_TYPE == ATT implemented so far!");
+                    " format error:  only EDGE_WEIGHT_TYPE == ATT or EUC_2D implemented so far!");
             active_section = 0;
             continue;
         }

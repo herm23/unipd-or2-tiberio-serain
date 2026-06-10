@@ -42,11 +42,21 @@ static void update_fixing_probability(double *p, int iteration, instance *inst) 
 //region Data-structure convertions
 
 void succ_to_permutation(int nnodes, const int *succ, unsigned int *sol_perm) {
+    // C3 fix: detect a non-Hamiltonian `succ` (subtours / invalid links) instead of silently
+    // producing a corrupted permutation. A single tour visits each node exactly once.
+    unsigned char *seen = calloc(nnodes, sizeof(unsigned char));
     int currNode = 0;
     for (int i = 0; i < nnodes; i++) {
-        sol_perm[i] = (unsigned int) succ[currNode];
-        currNode = succ[currNode];
+        int next = succ[currNode];
+        if (next < 0 || next >= nnodes || seen[next]) {
+            free(seen);
+            print_error_and_die("succ_to_permutation: succ is not a single Hamiltonian tour (subtour/invalid succ)");
+        }
+        seen[next] = 1;
+        sol_perm[i] = (unsigned int) next;
+        currNode = next;
     }
+    free(seen);
 }
 
 void permutation_to_succ(int nnodes, const unsigned int *sol_perm, int *succ) {
@@ -239,9 +249,11 @@ short is_solution_valid(const instance *inst, const unsigned int *solution, cons
     //Return 0 if valid, -1 otherways
     if (inst == NULL || solution == NULL) return -1;
 
-    if (expected_cost != calculate_solution_cost(inst, solution)) {
-        printf("ERROR: Expected cost %lf, calculated cost %lf\n", expected_cost,
-               calculate_solution_cost(inst, solution));
+    // C4 fix: compare with tolerance instead of exact double equality (the caller may maintain
+    // the cost incrementally, so rounding order can differ from a fresh recomputation).
+    const double actual_cost = calculate_solution_cost(inst, solution);
+    if (fabs(expected_cost - actual_cost) > EPSILON) {
+        printf("ERROR: Expected cost %lf, calculated cost %lf\n", expected_cost, actual_cost);
         return 0;
     }
 
@@ -640,11 +652,12 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
                     printf("\n[2opt] - New local incumbent: cost = %.2lf, time = %.2lf\n", initial_cost, curr_time);
                 }
             } else {
-                if (inst->verbosity >= SILENT) {
-                    printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
-                    free(temp_solution); // NOTE: Free memory before error exit to avoid leaks
-                    return -1;
-                }
+                // C10 fix: always free and bail on an invalid solution. The previous
+                // `if (verbosity >= SILENT)` guard was always true, leaving a dead fall-through
+                // that would otherwise keep an invalid tour.
+                printf("------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
+                free(temp_solution); // free before error exit to avoid leaks
+                return -1;
             }
         }
 
@@ -1046,7 +1059,7 @@ static void post_heuristic_solution(CPXCALLBACKCONTEXTptr context, instance *ins
 
     for (int i = 0; i < inst->nnodes; i++) {
         int j = succ_patched[i];
-        int idx = index_upper(i, j, inst->nnodes);
+        int idx = xpos(i, j, inst); // xpos() sorts (i,j); index_upper requires i<j (C1 fix)
         xheu[idx] = 1.0;
         objheu += get_precalculated_distance(inst, i, j);
     }
@@ -1200,6 +1213,12 @@ static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst)
         if (xstar[i] > 1e-6) edge_cuts_counter++;
     }
 
+    // C10 fix: nothing to separate if there are no active edges (avoids malloc(0) UB and a CCcut_mincut on empty input).
+    if (edge_cuts_counter == 0) {
+        free(xstar);
+        return 0;
+    }
+
     //NOTE: Defining data structure for concorde lib
     int *elist = (int *) malloc(2 * edge_cuts_counter * sizeof(int));
     double *xlist = (double *) malloc(edge_cuts_counter * sizeof(double));
@@ -1297,6 +1316,11 @@ static void TSPopt_callbacks(instance *inst, CPXENVptr env, CPXLPptr lp, double 
         print_error_and_die("Error in CPXcallbacksetfunc()");
     }
 
+    // C2 fix: the candidate callback runs a heuristic that mutates shared `inst` state
+    // (inst->iterations, and tabulist/plot when enabled). Force a single search thread so
+    // concurrent callbacks cannot race on it. Trades parallel speed for correctness.
+    CPXsetintparam(env, CPX_PARAM_THREADS, 1);
+
     // Calcolo e impostazione del time limit residuo iniziale
     double elapsed = second() - inst->tstart;
     double residual_time = inst->timelimit - elapsed;
@@ -1338,6 +1362,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
     if (CPXcallbacksetfunc(env, lp, contextid, my_callback, inst)) {
         print_error_and_die("Error in CPXcallbacksetfunc() inside Hard Fixing");
     }
+    CPXsetintparam(env, CPX_PARAM_THREADS, 1); // C2 fix: avoid races on shared inst from parallel callbacks
 
     // NOTE: Arrays required for CPXchgbds allocated once outside the loop
     int *indices_to_change = (int *) malloc(inst->nnodes * sizeof(int));
@@ -1379,7 +1404,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
         for (int i = 0; i < inst->nnodes; i++) {
             int curr = inst->solution[i];
             int next = inst->solution[(i + 1) % inst->nnodes];
-            int idx = index_upper(curr, next, inst->nnodes);
+            int idx = xpos(curr, next, inst); // xpos() sorts the pair (C1/HF1 fix)
             x_start_clique[idx] = 1.0;
         }
 
@@ -1400,7 +1425,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
             int next = inst->solution[(i + 1) % inst->nnodes];
 
             if (((double)rand() / RAND_MAX) < p) {
-                int idx = index_upper(curr, next, inst->nnodes);
+                int idx = xpos(curr, next, inst); // xpos() sorts the pair (C1/HF1 fix)
                 indices_to_change[fixed_edges_count] = idx;
                 lu_bounds[fixed_edges_count] = 'L';
                 bd_values[fixed_edges_count] = 1.0;
@@ -1535,6 +1560,7 @@ static void TSPopt_local_branching(instance *inst, CPXENVptr env, CPXLPptr lp) {
     if (CPXcallbacksetfunc(env, lp, contextid, my_callback, inst)) {
         print_error_and_die("Error in CPXcallbacksetfunc() inside Local Branching");
     }
+    CPXsetintparam(env, CPX_PARAM_THREADS, 1); // C2 fix: avoid races on shared inst from parallel callbacks
 
     const int n = inst->nnodes;
 
@@ -1669,6 +1695,7 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
     if (error || lp == NULL) {
         char errmsg[CPXMESSAGEBUFSIZE];
         CPXgeterrorstring(env, error, errmsg);
+        CPXcloseCPLEX(&env); // C6 fix: release the env (and its license token) before aborting
         print_error_and_die(errmsg);
     }
 
@@ -1718,9 +1745,9 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
         }
 
         case HARD_FIXING: {
-            // TODO: Call your 2-opt initialization method here to populate inst->solution and inst->zbest before starting
-            // e.g., build_2opt_initial_solution(inst);
-
+            // C5 fix: seed a real feasible incumbent (NN + 2-opt) before diving, instead of
+            // starting from the identity permutation.
+            matheuristic_warm_start(inst);
             TSPopt_hard_fixing(inst, env, lp);
             break;
         }
@@ -1848,7 +1875,9 @@ void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) {
 
 
 
-#define DEBUG    // da commentare se non si vuole il debugging
+// C8 fix: renamed from DEBUG (which collided with the DEBUG verbosity constant in consts.h and
+// triggered a -Wmacro-redefined warning). Comment this out to disable build_sol's degree checks.
+#define BUILD_SOL_CHECKS    // da commentare se non si vuole il debugging
 #define EPS 1e-5
 
 /**
@@ -1861,7 +1890,7 @@ void build_model(instance *inst, CPXENVptr env, CPXLPptr lp) {
  * @param  ncomp  Pointer to integer where the total number of components will be stored.
  */
 void build_sol(const double *xstar, instance *inst, int *succ, int *comp, int *ncomp) {
-#ifdef DEBUG
+#ifdef BUILD_SOL_CHECKS
     // Verify that every node has exactly degree 2 and variables are binary
     int *degree = (int *) calloc(inst->nnodes, sizeof(int));
     for (int i = 0; i < inst->nnodes; i++) {

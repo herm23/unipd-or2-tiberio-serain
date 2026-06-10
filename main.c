@@ -16,7 +16,7 @@ short optimize(instance *inst);
  * @return int Returns 0 on success, 1 on error.
  */
 int main(int argc, char **argv) {
-    instance inst;
+    instance inst = {0}; // C9 fix: zero-initialize so unset fields (e.g. nnodes) are not stack garbage
     parse_command_line(argc, argv, &inst);
 
     if (argc < 2) {
@@ -98,17 +98,6 @@ void update_instance_solution(instance *inst, unsigned int *new_sol, double new_
             if (inst->verbosity >= SILENT) printf("x------------ FOUND AN INVALID OPTIMAL SOLUTION!!! ------------\n");
         }
     }
-}
-
-/**
- * @brief Prepara una soluzione temporanea partendo da quella attuale dell'istanza.
- */
-unsigned int *prepare_temp_solution(instance *inst, double *cost, double *time) {
-    unsigned int *temp = initialize_identity_solution(inst->nnodes);
-    memcpy(temp, inst->solution, sizeof(unsigned int) * inst->nnodes);
-    *cost = inst->zbest;
-    *time = inst->tbest;
-    return temp;
 }
 
 /**
