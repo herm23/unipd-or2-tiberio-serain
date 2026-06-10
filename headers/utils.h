@@ -51,6 +51,7 @@ typedef struct {
 
     //Cplex params
     int ncols; //TODO: Review with filippo
+    int cplex_mode; // selected CPLEX mode (enum CPLEX_MODE): benders|callbacks|hardfixing|localbranching
 
 } instance;
 

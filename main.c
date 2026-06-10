@@ -209,9 +209,8 @@ short optimize(instance *inst) {
             break;
 
         case CPLEX:
-            //TODO: External param ?
-            enum CPLEX_MODE mode = CALLBACKS;
-            TSPopt(inst, mode);
+            // CPLEX mode is selected via the -cplex_mode CLI flag (default CALLBACKS).
+            TSPopt(inst, (enum CPLEX_MODE) inst->cplex_mode);
             break;
 
         default:

@@ -1460,6 +1460,201 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
     free(xstar);
 }
 
+// region Local Branching (matheuristic)
+
+// Tunable parameters for the local-branching matheuristic.
+#define LB_K_BASE        10     // initial neighborhood radius (max incumbent edges allowed to change)
+#define LB_K_STEP        10     // amount k is widened when the current neighborhood is exhausted
+#define LB_K_MAX         50     // hard cap on k (also capped by n-1)
+#define LB_ITERS_TARGET  10.0   // aim for ~this many dives over a finite time budget
+#define LB_MIN_ITER_TIME 1.0    // floor on per-iteration CPLEX time (s)
+#define LB_TIME_EPS      0.1    // stop when residual time drops below this (s)
+
+/**
+ * @brief Injects the current incumbent tour (inst->solution) into CPLEX as a MIP start (warm start).
+ *        Uses xpos() so the edge->column mapping is correct regardless of node ordering.
+ */
+static void inject_incumbent_mipstart(instance *inst, CPXENVptr env, CPXLPptr lp) {
+    int num_existing = CPXgetnummipstarts(env, lp);
+    if (num_existing > 0) CPXdelmipstarts(env, lp, 0, num_existing - 1);
+
+    double *xstart = (double *) calloc(inst->ncols, sizeof(double));
+    int *ind = (int *) malloc(inst->ncols * sizeof(int));
+    for (int i = 0; i < inst->ncols; i++) ind[i] = i;
+
+    for (int i = 0; i < inst->nnodes; i++) {
+        int curr = inst->solution[i];
+        int next = inst->solution[(i + 1) % inst->nnodes];
+        xstart[xpos(curr, next, inst)] = 1.0; // xpos() sorts the pair -> correct column
+    }
+
+    int effort = CPX_MIPSTART_AUTO;
+    int beg = 0;
+    CPXaddmipstarts(env, lp, 1, inst->ncols, &beg, ind, xstart, &effort, NULL);
+
+    free(ind);
+    free(xstart);
+}
+
+/**
+ * @brief Seeds inst->solution / inst->zbest with an NN + 2-opt heuristic tour.
+ *        Shared warm-start for the CPLEX matheuristics (local branching here; hard-fixing can reuse it).
+ */
+static void matheuristic_warm_start(instance *inst) {
+    // Force a plain NN + 2-opt configuration (no GRASP randomization, no kicks, no tabu).
+    inst->GRASP_alpha = 0;
+    inst->VNS_kick_counter = 0;
+    inst->tenure = 0;
+
+    int finite = (inst->timelimit < 1e15);
+    double constr_budget = finite ? inst->timelimit * 0.1 : inst->timelimit;
+    double refine_budget = finite ? inst->timelimit * 0.2 : inst->timelimit;
+
+    greedy_nn_heuristic(inst, constr_budget, NONE);
+    twoOpt_refinement(inst, refine_budget, inst->solution, &inst->zbest, &inst->tbest, 0);
+
+    if (inst->verbosity >= INFO) {
+        printf("[Matheuristic] Warm-start (NN+2opt) cost: %.2lf at %.2lf s\n",
+               inst->zbest, second() - inst->tstart);
+    }
+}
+
+/**
+ * @brief Local-branching matheuristic (Fischetti-Lodi soft fixing).
+ *
+ * Keeps the full TSP model and, around the current incumbent tour x_bar, adds the soft-fixing constraint
+ *     sum_{e in E(x_bar)} x_e >= n - k
+ * which allows at most k of the n incumbent edges to leave the tour (neighborhood radius k). The restricted
+ * problem is solved (under SEC callbacks) within a bounded per-iteration time slice; on improvement the
+ * incumbent is re-centered, otherwise the neighborhood is widened (k += step). The constraint is removed and
+ * rebuilt each iteration. Requires inst->solution/inst->zbest to already hold a feasible warm-start tour.
+ */
+static void TSPopt_local_branching(instance *inst, CPXENVptr env, CPXLPptr lp) {
+    // Register SEC separation callbacks for the sub-MIPs (same as the other CPLEX modes).
+    CPXLONG contextid = CPX_CALLBACKCONTEXT_CANDIDATE | CPX_CALLBACKCONTEXT_RELAXATION;
+    if (CPXcallbacksetfunc(env, lp, contextid, my_callback, inst)) {
+        print_error_and_die("Error in CPXcallbacksetfunc() inside Local Branching");
+    }
+
+    const int n = inst->nnodes;
+
+    // Buffers allocated once and reused across iterations.
+    int *succ = (int *) calloc(n, sizeof(int));
+    int *comp = (int *) calloc(n, sizeof(int));
+    double *xstar = (double *) calloc(inst->ncols, sizeof(double));
+    int *lb_index = (int *) malloc(n * sizeof(int));   // columns of the incumbent edges
+    double *lb_value = (double *) malloc(n * sizeof(double));
+    for (int i = 0; i < n; i++) lb_value[i] = 1.0;
+
+    int k = LB_K_BASE;
+    int k_max = (n - 1 < LB_K_MAX) ? (n - 1) : LB_K_MAX;   // keep rhs = n-k >= 1
+    if (k_max < LB_K_BASE) k_max = LB_K_BASE;              // tiny instances: allow at least one solve
+    int iteration = 0;
+
+    if (inst->verbosity >= INFO) {
+        printf("\n[Local-Branching] Start. Global time limit %.2lf s, base k=%d, k_max=%d\n",
+               inst->timelimit, k, k_max);
+    }
+
+    while (1) {
+        double elapsed = second() - inst->tstart;
+        double residual = inst->timelimit - elapsed;
+        if (residual <= LB_TIME_EPS) {
+            if (inst->verbosity >= INFO) printf("[Local-Branching] Time limit reached. Exiting loop.\n");
+            break;
+        }
+        if (k > k_max) {
+            if (inst->verbosity >= INFO) printf("[Local-Branching] Neighborhood exhausted (k>%d). Exiting loop.\n", k_max);
+            break;
+        }
+
+        // Bounded per-iteration time slice (capped diving instead of spending the whole residual at once).
+        double per_iter = residual;
+        if (inst->timelimit < 1e15) {
+            double cap = inst->timelimit / LB_ITERS_TARGET;
+            if (cap < per_iter) per_iter = cap;
+        }
+        if (per_iter < LB_MIN_ITER_TIME && residual > LB_MIN_ITER_TIME) per_iter = LB_MIN_ITER_TIME;
+        if (per_iter > residual) per_iter = residual;
+
+        // Warm-start the sub-MIP with the current incumbent.
+        inject_incumbent_mipstart(inst, env, lp);
+
+        // Build and add the local-branching constraint: sum_{e in incumbent} x_e >= n - k.
+        for (int i = 0; i < n; i++) {
+            int curr = inst->solution[i];
+            int next = inst->solution[(i + 1) % n];
+            lb_index[i] = xpos(curr, next, inst);
+        }
+        double rhs = (double)(n - k);
+        char sense = 'G';
+        int izero = 0;
+        int rows_before = CPXgetnumrows(env, lp);
+        if (CPXaddrows(env, lp, 0, 1, n, &rhs, &sense, &izero, lb_index, lb_value, NULL, NULL)) {
+            print_error_and_die("CPXaddrows() failed for local-branching constraint");
+        }
+
+        CPXsetdblparam(env, CPX_PARAM_TILIM, per_iter);
+
+        if (inst->verbosity >= DEBUG) {
+            printf("[Local-Branching] iter %d: k=%d, rhs=%.0f, slice=%.2fs, residual=%.2fs\n",
+                   iteration, k, rhs, per_iter, residual);
+        }
+
+        int solve_err = CPXmipopt(env, lp);
+        int improved = 0;
+        if (!solve_err) {
+            int stat = CPXgetstat(env, lp);
+            if (CPXgetx(env, lp, xstar, 0, inst->ncols - 1) == 0) {
+                int ncomp = 0;
+                build_sol(xstar, inst, succ, comp, &ncomp);
+                if (ncomp == 1) {
+                    unsigned int *cand = (unsigned int *) malloc(n * sizeof(unsigned int));
+                    succ_to_permutation(n, succ, cand);
+                    double cand_cost = calculate_solution_cost(inst, cand);
+                    if (cand_cost < inst->zbest - EPSILON) {
+                        inst->zbest = cand_cost;
+                        inst->tbest = second() - inst->tstart;
+                        memcpy(inst->solution, cand, sizeof(unsigned int) * n);
+                        improved = 1;
+                        if (inst->verbosity >= INFO) {
+                            printf("[Local-Branching] New incumbent: cost %.2lf at %.2lf s (k=%d)\n",
+                                   inst->zbest, inst->tbest, k);
+                        }
+                    }
+                    free(cand);
+                } else if (inst->verbosity >= DEBUG) {
+                    printf("[Local-Branching] Sub-MIP returned %d components; skipping (callbacks should prevent this).\n", ncomp);
+                }
+            }
+
+            // Adapt the neighborhood radius.
+            if (improved) {
+                k = LB_K_BASE;            // re-center and intensify around the new incumbent
+            } else if (stat == CPXMIP_OPTIMAL || stat == CPXMIP_OPTIMAL_TOL) {
+                k += LB_K_STEP;           // current neighborhood fully explored with no gain -> widen
+            }
+            // else: timed out without improvement -> keep k and continue with remaining time.
+        }
+
+        // Remove the local-branching row before the next iteration (soft fixing is transient).
+        CPXdelrows(env, lp, rows_before, rows_before);
+        iteration++;
+    }
+
+    if (inst->verbosity >= INFO) {
+        printf("[Local-Branching] Finished after %d iterations. Best cost: %.2lf\n", iteration, inst->zbest);
+    }
+
+    free(succ);
+    free(comp);
+    free(xstar);
+    free(lb_index);
+    free(lb_value);
+}
+
+// endregion Local Branching
+
 int TSPopt(instance *inst, enum CPLEX_MODE mode) {
     int error = 0;
 
@@ -1527,6 +1722,13 @@ int TSPopt(instance *inst, enum CPLEX_MODE mode) {
             // e.g., build_2opt_initial_solution(inst);
 
             TSPopt_hard_fixing(inst, env, lp);
+            break;
+        }
+
+        case LOCAL_BRANCHING: {
+            // Seed a feasible incumbent (NN + 2-opt) before soft-fixing around it.
+            matheuristic_warm_start(inst);
+            TSPopt_local_branching(inst, env, lp);
             break;
         }
 

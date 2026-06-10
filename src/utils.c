@@ -251,6 +251,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
     inst->timelimit = 1.0E+20;
     inst->no_plot = 0;
     inst->verbosity = DEFAULT_VERBOSITY;
+    inst->cplex_mode = CALLBACKS; // default preserves previous hardcoded behavior
 
     int help = 0;
     if (argc < 1) help = 1;
@@ -318,6 +319,17 @@ void parse_command_line(int argc, char **argv, instance *inst) {
             inst->model_type = atoi(argv[++i]);
             continue;
         } // model type
+        if ((strcmp(argv[i], "-cplex_mode") == 0) ||
+            (strcmp(argv[i], "-cplex-mode") == 0)
+        ) {
+            const char *m = argv[++i];
+            if (strcmp(m, "benders") == 0) inst->cplex_mode = BENDERS_LOOP;
+            else if (strcmp(m, "callbacks") == 0) inst->cplex_mode = CALLBACKS;
+            else if (strcmp(m, "hardfixing") == 0) inst->cplex_mode = HARD_FIXING;
+            else if (strcmp(m, "localbranching") == 0) inst->cplex_mode = LOCAL_BRANCHING;
+            else print_error_and_die("Unknown -cplex_mode (use benders|callbacks|hardfixing|localbranching)");
+            continue;
+        } // CPLEX mode selection (only relevant when -model points to CPLEX)
         if ((strcmp(argv[i], "-help") == 0) || strcmp(argv[i], "--help") == 0) {
             help = 1;
             continue;
@@ -333,6 +345,7 @@ void parse_command_line(int argc, char **argv, instance *inst) {
         printf("-file %s\n", inst->input_file);
         printf("-time_limit %lf\n", inst->timelimit);
         printf("-model_type %d\n", inst->model_type);
+        printf("-cplex_mode %d (0=benders, 1=callbacks, 2=hardfixing, 3=localbranching)\n", inst->cplex_mode);
         print_tsp_strategies();
         printf("-seed %d\n", inst->randomseed);
         printf("-verbosity %d\n", inst->verbosity);
