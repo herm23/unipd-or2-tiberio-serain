@@ -1,0 +1,5 @@
+Notes foreach chapter:
+
+TODO: Check how it is computer the nearest neighbour and if it has been computed in the same way as descripted in lesson 4
+
+Chapter 1.
