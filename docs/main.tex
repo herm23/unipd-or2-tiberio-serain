@@ -821,6 +821,17 @@ $0.1\,n$   & 1.035 & 53 \\
 \end{tabular}
 \end{table}
 
+\paragraph{Note on the deployed tenure value.}
+Although the proportional policy $\theta = \lfloor 0.1 n \rfloor$ achieves the best average
+normalized cost and win rate among all configurations tested (Table~\ref{tab:tabu_tenure}),
+the current implementation runs Tabu Search with a \textbf{fixed tenure of $\theta = 100$}
+regardless of instance size, rather than with the proportional policy. This corresponds to
+one of the weaker configurations evaluated in this study (average normalized cost $1.062$,
+win rate $27\%$), and is inconsistent with the recommendation derived from the tuning
+experiment above. Updating the default tenure to $\theta = \lfloor 0.1 n \rfloor$ is left as
+an actionable improvement rather than a design choice supported by the data collected here.
+\textbf{[Da rileggere -- Hermann]}
+
 % -----------------------------------------------------------
 \subsection{Comparison of Heuristic and Metaheuristic Methods}
 % -----------------------------------------------------------
@@ -920,6 +931,12 @@ constraints (SECs) are required to enforce connectivity; in practice, these are 
 via callback functions during the branch-and-cut process, which is the standard approach in
 CPLEX-based TSP solvers.
 
+In this work, four different strategies for enforcing SECs and improving the incumbent
+solution are implemented and described in detail in Section~\ref{sec:tspopt}: an iterative
+cutting-plane loop, a callback-based branch-and-cut, and two matheuristics (Hard Fixing and
+Local Branching) that use CPLEX as a large-neighborhood-search engine around a warm-started
+incumbent tour.
+
 % -----------------------------------------------------------
 \subsection{Implementation with CPLEX}
 % -----------------------------------------------------------
@@ -951,24 +968,287 @@ The model is built programmatically using the CPLEX callable library. The functi
 \end{enumerate}
 
 \subsubsection{Solving the Model (\texttt{TSPopt})}
+\label{sec:tspopt}
 
-The main solving routine \texttt{TSPopt} initializes the CPLEX environment, builds the
-model, and invokes the MIP optimizer:
+The main solving routine \texttt{TSPopt} is not a single fixed procedure but a
+\textit{dispatcher} that selects among four alternative exact/matheuristic strategies for
+enforcing sub-tour elimination and improving the incumbent solution, chosen at runtime via
+the command-line flag \texttt{-cplex\_mode}:
 
 \begin{enumerate}
-    \item A CPLEX environment \texttt{CPXENVptr} and a problem object \texttt{CPXLPptr} are
-          initialized via \texttt{CPXopenCPLEX} and \texttt{CPXcreateprob}, respectively.
-
-    \item The model is populated by calling \texttt{build\_model}.
-
-    \item The MIP optimizer is invoked via \texttt{CPXmipopt}, which internally executes the
-          branch-and-cut algorithm. CPLEX automatically handles LP relaxation at each node,
-          selects branching variables, and applies cutting planes.
-
-    \item Upon termination, the optimal solution values are retrieved with \texttt{CPXgetx}.
-          For each pair $(i,j)$, if $x_{ij} > 0.5$ (i.e., the variable is rounded to 1 in
-          the integer solution), the edge $(i,j)$ is included in the tour.
+    \item \textbf{Benders Loop} (\texttt{benders}) --- an iterative cutting-plane loop that
+          re-solves the MIP after adding violated sub-tour elimination constraints (SECs).
+    \item \textbf{Callbacks} (\texttt{callbacks}, default) --- a single branch-and-cut run in
+          which SECs are separated on the fly through CPLEX generic callbacks, both on integer
+          candidates and on fractional relaxation solutions.
+    \item \textbf{Hard Fixing} (\texttt{hardfixing}) --- a matheuristic that repeatedly fixes a
+          random subset of the incumbent tour's edges and re-optimizes the residual problem.
+    \item \textbf{Local Branching} (\texttt{localbranching}) --- a matheuristic, due to
+          Fischetti and Lodi \cite{fischetti2003}, that restricts the search to a
+          Hamming-distance neighborhood of the incumbent via a soft-fixing constraint.
 \end{enumerate}
+
+In all four modes, a CPLEX environment \texttt{CPXENVptr} and problem object
+\texttt{CPXLPptr} are first initialized via \texttt{CPXopenCPLEX} and \texttt{CPXcreateprob},
+and the base model (degree constraints only, no SECs) is populated by \texttt{build\_model}.
+The Hard Fixing and Local Branching modes additionally require a feasible incumbent before
+CPLEX is invoked, obtained through the common warm-start routine described at the end of this
+section.
+
+\paragraph{Benders Loop.}
+This mode implements the classical cutting-plane approach to the TSP, originally proposed by
+Dantzig, Fulkerson and Johnson \cite{dantzig1954}: the ILP is solved repeatedly, and after each
+solve the connected components of the resulting edge set are examined; any component that does
+not span all $n$ nodes yields a violated SEC, added to the model via \texttt{CPXaddrows}
+before the next solve. The loop terminates as soon as a single component (a Hamiltonian tour)
+is obtained, or the global time limit is exhausted.
+
+\begin{algorithm}[H]
+\caption{Benders Loop for the TSP (\texttt{TSPopt\_benders})}
+\label{alg:benders}
+\begin{algorithmic}[1]
+\Require Base ILP model (degree constraints only), time limit $T$
+\Ensure Optimal tour \texttt{succ}, cost $z^*$
+\State \texttt{ncomp} $\leftarrow +\infty$
+\Repeat
+    \State Set \texttt{CPX\_PARAM\_TILIM} to the residual time budget
+    \State Solve the current MIP via \texttt{CPXmipopt}
+    \State $x^* \leftarrow$ \texttt{CPXgetx}
+    \State $(\texttt{succ}, \texttt{comp}, \texttt{ncomp}) \leftarrow \textsc{BuildSol}(x^*)$
+    \If{\texttt{ncomp} $> 1$}
+        \For{each component $S_k$, $k = 1, \ldots, \texttt{ncomp}$}
+            \State Add SEC $\displaystyle\sum_{i<j,\; i,j \in S_k} x_{ij} \leq |S_k| - 1$ via \texttt{CPXaddrows}
+        \EndFor
+    \EndIf
+\Until{\texttt{ncomp} $= 1$ \textbf{or} time limit exceeded}
+\State \Return \texttt{succ}, $z^*$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Branch-and-Cut with Generic Callbacks.}
+The default mode registers a single CPLEX generic callback on two contexts,
+\texttt{CPX\_CALLBACKCONTEXT\_CANDIDATE} and \texttt{CPX\_CALLBACKCONTEXT\_RELAXATION}, so that
+sub-tour elimination is performed \textit{during} the branch-and-cut search rather than through
+repeated re-solves, following the branch-and-cut paradigm for the TSP established by Padberg
+and Rinaldi \cite{padberg1991}.
+
+On the candidate context, whenever CPLEX finds an integer-feasible candidate whose edge set
+decomposes into \texttt{ncomp} $> 1$ components, the candidate is rejected and one SEC per
+component is added on the fly, exactly as in the Benders loop; in addition, a repaired
+heuristic solution derived from the same candidate is posted back to CPLEX (see
+\textit{Posting Heuristic Solutions} below), so that the incumbent bound can improve even while
+the candidate itself is being rejected.
+
+\begin{algorithm}[H]
+\caption{Integer-Candidate Callback: SEC Rejection (\texttt{my\_callback\_candidate})}
+\label{alg:cb_candidate}
+\begin{algorithmic}[1]
+\Require Integer-feasible candidate $x^*$ supplied by CPLEX through the callback context
+\State $(\texttt{succ}, \texttt{comp}, \texttt{ncomp}) \leftarrow \textsc{BuildSol}(x^*)$
+\If{\texttt{ncomp} $= 1$}
+    \State \Return \Comment{the candidate is already a valid tour; accept it}
+\EndIf
+\State \textsc{PostHeuristicSolution}(\texttt{succ}, \texttt{comp}, \texttt{ncomp}) \Comment{Algorithm~\ref{alg:post_heur}}
+\For{each component $S_k$, $k = 1, \ldots, \texttt{ncomp}$}
+    \State Build SEC row $\displaystyle\sum_{i<j,\; i,j \in S_k} x_{ij} \leq |S_k| - 1$
+\EndFor
+\State \texttt{CPXcallbackrejectcandidate}(context, all SEC rows)
+\end{algorithmic}
+\end{algorithm}
+
+On the relaxation context, the (possibly fractional) LP solution at selected nodes of the
+search tree is separated using an exact minimum-cut computation provided by the Concorde
+library \cite{applegate2006}: the support graph induced by edges with $x^*_{ij} > 10^{-6}$ is
+passed to \texttt{CCcut\_mincut}, and if the minimum cut value is below $2 - \varepsilon$
+(violating the degree-2 requirement of a valid tour) the corresponding cut-set inequality is
+added as a user cut.
+
+\begin{algorithm}[H]
+\caption{Relaxation Callback: Fractional Cut Separation via Concorde (\texttt{my\_callback\_relaxation})}
+\label{alg:cb_relaxation}
+\begin{algorithmic}[1]
+\Require Fractional LP solution $x^*$ supplied by CPLEX through the callback context
+\State Build support graph $E' = \{(i,j) : x^*_{ij} > 10^{-6}\}$ with edge weights $x^*_{ij}$
+\State $(\text{mincut}, S) \leftarrow \texttt{CCcut\_mincut}(E')$
+\If{$\text{mincut} < 2 - \varepsilon$ \textbf{and} $2 \leq |S| \leq n-2$}
+    \State Build user cut $\displaystyle\sum_{i<j,\; i,j \in S} x_{ij} \leq |S| - 1$
+    \State \texttt{CPXcallbackaddusercuts}(context, cut, \texttt{purgeable})
+\EndIf
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Thread safety.}
+Both callbacks mutate state that belongs to the shared instance struct (e.g., iteration
+counters, and in some configurations the tabu list or plotting buffers). Since CPLEX may, by
+default, invoke generic callbacks concurrently from multiple search threads, the environment
+parameter \texttt{CPX\_PARAM\_THREADS} is forced to $1$ for the duration of the callback-based
+solve (and, for the same reason, during Hard Fixing and Local Branching). This trades
+potential parallel search speed for correctness of the shared mutable state.
+
+\paragraph{Subtour Patching Heuristic.}
+Whenever a fragmented solution (\texttt{ncomp} $> 1$) is encountered --- either at the end of a
+Benders iteration or inside the candidate callback --- a greedy patching procedure merges all
+components into a single tour by repeatedly identifying the pair of components whose
+successor edges can be re-crossed at the least additional cost.
+
+\begin{algorithm}[H]
+\caption{Subtour Patching Heuristic (\texttt{apply\_patching})}
+\label{alg:patching}
+\begin{algorithmic}[1]
+\Require Fragmented (\texttt{succ}, \texttt{comp}, \texttt{ncomp})
+\Ensure Single-tour \texttt{succ}, total cost adjustment $\Delta_{\text{tot}}$
+\State $\Delta_{\text{tot}} \leftarrow 0$
+\While{\texttt{ncomp} $> 1$}
+    \State $\Delta^* \leftarrow +\infty$
+    \For{each pair $(i,j)$, $i < j$, with $\texttt{comp}[i] \neq \texttt{comp}[j]$}
+        \State $\Delta \leftarrow \bigl(d_{i,\,\texttt{succ}[j]} + d_{j,\,\texttt{succ}[i]}\bigr) - \bigl(d_{i,\,\texttt{succ}[i]} + d_{j,\,\texttt{succ}[j]}\bigr)$
+        \If{$\Delta < \Delta^*$}
+            \State $\Delta^* \leftarrow \Delta$, $(i^*, j^*) \leftarrow (i, j)$
+        \EndIf
+    \EndFor
+    \State Cross the two components: swap $\texttt{succ}[i^*] \leftrightarrow \texttt{succ}[j^*]$
+    \State Relabel every node in $\texttt{comp}[j^*]$ to $\texttt{comp}[i^*]$; \texttt{ncomp} $\leftarrow$ \texttt{ncomp} $- 1$
+    \State $\Delta_{\text{tot}} \leftarrow \Delta_{\text{tot}} + \Delta^*$
+\EndWhile
+\State \Return \texttt{succ}, $\Delta_{\text{tot}}$
+\end{algorithmic}
+\end{algorithm}
+
+This is structurally the same greedy cheapest-reconnection idea used by the Extra Mileage
+construction heuristic (Section~3.1.2), applied here to reconnect existing fragments rather
+than to insert unvisited cities; its worst-case complexity is likewise $O(n^3)$ over the full
+merging process.
+
+\paragraph{Posting Heuristic Solutions to CPLEX.}
+After patching produces a single tour, the tour is further improved with a bounded run of
+2-opt refinement (Section~3.2.1) before being converted back into an edge vector and
+submitted to CPLEX as a new incumbent through \texttt{CPXcallbackpostheursoln}, allowing the
+solver's primal bound to improve throughout the search even though the originating candidate
+was itself rejected as infeasible.
+
+\begin{algorithm}[H]
+\caption{Posting a Refined Heuristic Solution to CPLEX (\texttt{post\_heuristic\_solution})}
+\label{alg:post_heur}
+\begin{algorithmic}[1]
+\Require Fragmented (\texttt{succ}, \texttt{comp}, \texttt{ncomp}), remaining time budget
+\State $(\texttt{succ}, \Delta) \leftarrow \textsc{ApplyPatching}(\texttt{succ}, \texttt{comp}, \texttt{ncomp})$ \Comment{Algorithm~\ref{alg:patching}}
+\State $\pi \leftarrow \textsc{SuccToPermutation}(\texttt{succ})$
+\If{remaining time $> 0$}
+    \State $(\pi, z) \leftarrow \textsc{TwoOpt}(\pi)$ \Comment{best-improvement refinement, Algorithm~\ref{alg:2opt}}
+\EndIf
+\State $\texttt{succ} \leftarrow \textsc{PermutationToSucc}(\pi)$
+\For{each node $i$}
+    \State $x^{\text{heu}}_{\,\text{xpos}(i,\,\texttt{succ}[i])} \leftarrow 1$
+\EndFor
+\State \texttt{CPXcallbackpostheursoln}(context, $x^{\text{heu}}$, $z$, \texttt{CPXCALLBACKSOLUTION\_NOCHECK})
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Hard Fixing Matheuristic.}
+This mode treats CPLEX as a large-neighborhood-search engine: starting from the warm-started
+incumbent, at each iteration every edge of the current tour is fixed to $1$ independently with
+probability $p$ (its lower bound is set to $1$ via \texttt{CPXchgbds}), and the resulting
+restricted MIP --- with the incumbent injected as a MIP start via \texttt{CPXaddmipstarts} ---
+is re-optimized under a per-iteration time cap. All fixings are undone at the end of the
+iteration regardless of outcome. The fixing probability starts at $p = 0.5$ and is resampled
+uniformly in $[0.2, 0.5]$ every ten iterations, trading off the size of the residual problem
+(larger $p$ fixes more edges, shrinking the sub-problem) against the diversity of the
+neighborhoods explored.
+
+\begin{algorithm}[H]
+\caption{Hard Fixing Matheuristic (\texttt{TSPopt\_hard\_fixing})}
+\label{alg:hardfixing}
+\begin{algorithmic}[1]
+\Require Warm-started incumbent tour $\pi^*$, cost $z^*$, time limit $T$
+\State $p \leftarrow 0.5$, $\text{iter} \leftarrow 0$
+\While{residual time $> \varepsilon$}
+    \If{$\text{iter} > 0$ \textbf{and} $\text{iter} \bmod 10 = 0$}
+        \State $p \leftarrow 0.2 + U(0,1) \cdot 0.3$
+    \EndIf
+    \State Inject $\pi^*$ as MIP start via \texttt{CPXaddmipstarts}
+    \For{each edge $(u,v)$ of $\pi^*$}
+        \If{$U(0,1) < p$}
+            \State Fix $x_{uv} \leftarrow 1$ via \texttt{CPXchgbds}
+        \EndIf
+    \EndFor
+    \State $\text{per\_iter} \leftarrow \min(\text{residual time},\; T/10)$, floored at $1$s
+    \State Set \texttt{CPX\_PARAM\_TILIM} $\leftarrow \text{per\_iter}$; solve restricted MIP via \texttt{CPXmipopt}
+    \State $(\texttt{succ}, \texttt{comp}, \texttt{ncomp}) \leftarrow \textsc{BuildSol}(x^*)$
+    \If{$\texttt{ncomp} = 1$ \textbf{and} obj $< z^*$}
+        \State $z^* \leftarrow$ obj, $\pi^* \leftarrow \textsc{SuccToPermutation}(\texttt{succ})$
+    \EndIf
+    \State Reset all lower bounds to $0$ (unfix every edge)
+    \State $\text{iter} \leftarrow \text{iter} + 1$
+\EndWhile
+\State \Return $\pi^*$, $z^*$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Local Branching Matheuristic.}
+Local Branching, introduced by Fischetti and Lodi \cite{fischetti2003}, restricts each
+re-optimization to a Hamming-ball neighborhood of the incumbent by adding a single
+\textit{soft-fixing} constraint rather than hard variable bounds:
+\[
+\sum_{(u,v) \in \pi^*} x_{uv} \;\geq\; n - k,
+\]
+which allows at most $k$ edges of the incumbent to be dropped in the next solution. The
+neighborhood radius $k$ is adapted at run time: it is reset to a base value $k_{\text{base}}$
+whenever an improving solution is found (intensification), and widened by a fixed step whenever
+the restricted sub-MIP is solved to proven optimality without improvement (diversification),
+following the same reactive scheme originally proposed by Fischetti and Lodi.
+
+\begin{algorithm}[H]
+\caption{Local Branching Matheuristic (\texttt{TSPopt\_local\_branching})}
+\label{alg:localbranching}
+\begin{algorithmic}[1]
+\Require Warm-started incumbent tour $\pi^*$, cost $z^*$, time limit $T$
+\State $k \leftarrow k_{\text{base}}$ ($=10$), $\quad k_{\max} \leftarrow \min(n-1,\, 50)$
+\While{residual time $> \varepsilon$ \textbf{and} $k \leq k_{\max}$}
+    \State Inject $\pi^*$ as MIP start
+    \State Add local-branching row $\sum_{(u,v) \in \pi^*} x_{uv} \geq n - k$ via \texttt{CPXaddrows}
+    \State $\text{per\_iter} \leftarrow \min(\text{residual time},\; T/10)$, floored at $1$s
+    \State Set \texttt{CPX\_PARAM\_TILIM} $\leftarrow \text{per\_iter}$; solve via \texttt{CPXmipopt}
+    \State $(\texttt{succ}, \texttt{comp}, \texttt{ncomp}) \leftarrow \textsc{BuildSol}(x^*)$
+    \State $\text{improved} \leftarrow \textbf{false}$
+    \If{$\texttt{ncomp} = 1$ \textbf{and} $\textsc{Cost}(\texttt{succ}) < z^* - \varepsilon$}
+        \State $z^* \leftarrow \textsc{Cost}(\texttt{succ})$, $\pi^* \leftarrow \textsc{SuccToPermutation}(\texttt{succ})$, $\text{improved} \leftarrow \textbf{true}$
+    \EndIf
+    \If{improved}
+        \State $k \leftarrow k_{\text{base}}$ \Comment{re-center on the new incumbent}
+    \ElsIf{sub-MIP solved to proven optimality}
+        \State $k \leftarrow k + 10$ \Comment{widen the neighborhood}
+    \EndIf
+    \State Remove the local-branching row via \texttt{CPXdelrows}
+\EndWhile
+\State \Return $\pi^*$, $z^*$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Shared Warm-Start Construction.}
+Both matheuristic modes require a feasible starting tour before the first CPLEX solve. This is
+obtained through a common routine that reuses the heuristics of Section~3: all randomization is
+disabled (\texttt{GRASP\_alpha} $= 0$, \texttt{VNS\_kick\_counter} $= 0$, \texttt{tenure} $= 0$),
+a deterministic Nearest Neighbor tour is built with a small fraction of the total time budget,
+and immediately refined with 2-opt using a second, larger fraction of the budget.
+
+\begin{algorithm}[H]
+\caption{Shared Warm-Start Construction (\texttt{matheuristic\_warm\_start})}
+\label{alg:warmstart}
+\begin{algorithmic}[1]
+\Require Total time limit $T$
+\Ensure Initial incumbent tour $\pi^*$, cost $z^*$
+\State Disable randomization: \texttt{GRASP\_alpha} $\leftarrow 0$, \texttt{VNS\_kick\_counter} $\leftarrow 0$, \texttt{tenure} $\leftarrow 0$
+\State $(\pi^*, z^*) \leftarrow \textsc{GreedyNN}(\text{time budget} = 0.1\,T)$
+\State $(\pi^*, z^*) \leftarrow \textsc{TwoOpt}(\pi^*, \text{time budget} = 0.2\,T)$
+\State \Return $\pi^*, z^*$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Retrieving the Solution.}
+Regardless of the mode selected, once the loop above terminates the best solution found is
+available as a binary vector $x^*$: for each pair $(i,j)$ with $x^*_{ij} > 0.5$, the edge
+$(i,j)$ is considered part of the tour, and \texttt{build\_sol} (Algorithm~\ref{alg:build_sol})
+is used to reconstruct the successor and component arrays one final time.
 
 \subsubsection{Tour Reconstruction (\texttt{build\_sol})}
 
@@ -1013,6 +1293,80 @@ degree 2 in the solution, raising an error otherwise.
 \State \Return \texttt{succ}, \texttt{comp}, \texttt{ncomp}
 \end{algorithmic}
 \end{algorithm}
+
+% -----------------------------------------------------------
+\subsection{Tour Representations and Data Structure Conversion}
+% -----------------------------------------------------------
+
+The solver relies on two different in-memory representations of a tour, converting between
+them at well-defined hand-off points between the heuristic/metaheuristic components
+(Sections~3--4) and the exact/matheuristic components described above. Keeping both
+representations, rather than committing to a single one, is a deliberate design choice driven
+by the fact that the two families of methods operate on fundamentally different objects: an
+ordered sequence of cities versus an unordered set of selected edges.
+
+\paragraph{Permutation array.}
+Heuristics and metaheuristics operate on a permutation array
+$\pi = [\pi_0, \pi_1, \ldots, \pi_{n-1}]$, where $\pi_i$ is the $i$-th city visited along the
+tour. This layout gives $O(1)$ access to ``the city visited at step $i$'' and its neighbors,
+and --- crucially --- allows an entire tour segment to be reversed in place by reversing a
+contiguous slice of the array, which is the core operation of the 2-opt move
+(Section~3.2.1) and of the double bridge kick (Section~4.2). Its main limitation is that it can
+only represent a single Hamiltonian cycle: there is no way to encode ``these edges form two
+disjoint sub-tours,'' which is exactly the situation that arises transiently while solving the
+ILP relaxation, before enough sub-tour elimination constraints have been added.
+
+\paragraph{Successor and component arrays.}
+The exact and matheuristic methods, in contrast, operate on the binary edge vector $x^*_{ij}$
+returned by CPLEX (indexed via \texttt{xpos}/\texttt{index\_upper}, as in
+Section~5.2.1). CPLEX's native output is an unordered set of selected edges which, before
+enough SECs have been added, may decompose into several disjoint cycles rather than a single
+tour. The function \texttt{build\_sol} (Algorithm~\ref{alg:build_sol}) reconstructs from
+$x^*$ a \texttt{succ} array (the direct successor of each node along its cycle) together with
+a \texttt{comp} array (the connected component each node belongs to) and a count
+\texttt{ncomp} of such components. This succ/comp pair is the only one of the two
+representations able to express a fragmented, not-yet-a-tour solution, which is why it is the
+natural representation for every component downstream of a raw CPLEX solve: the Benders loop,
+both callbacks, and the patching heuristic all operate directly on \texttt{succ}/\texttt{comp}.
+
+\paragraph{Conversion functions.}
+Two lightweight $O(n)$ functions convert between the representations at the points where a
+fragmented, edge-based view must become a linear, position-based view, or vice versa:
+
+\begin{itemize}
+    \item \texttt{succ\_to\_permutation} walks the \texttt{succ} array for $n$ steps starting
+          from node $0$, appending each visited node to the permutation array, and fails if a
+          node is revisited before all $n$ nodes have been seen --- which would indicate that
+          \texttt{succ} does not encode a single Hamiltonian cycle. It is used after
+          \texttt{apply\_patching} has merged every component into one, and after the Hard
+          Fixing / Local Branching sub-MIPs return a single-component solution, so that the
+          resulting tour can be handed to the 2-opt refinement routine or stored as the
+          instance's current best solution.
+    \item \texttt{permutation\_to\_succ} performs the inverse mapping,
+          $\texttt{succ}[\pi_i] \leftarrow \pi_{(i+1) \bmod n}$ for every $i$, and is used
+          whenever a permutation-based incumbent (e.g., the warm-started tour built by
+          \texttt{matheuristic\_warm\_start}, Algorithm~\ref{alg:warmstart}) must be
+          re-expressed as an edge set --- for instance, to determine which variables to fix in
+          Hard Fixing, which edges to include in the Local Branching soft-fixing row, or which
+          edges to mark in $x^{\text{heu}}$ before posting a heuristic solution to CPLEX.
+\end{itemize}
+
+\paragraph{A typical conversion pipeline.}
+The two conversions above compose into a recurring pipeline, used every time a fragmented
+CPLEX solution must be turned into an improved, feasible incumbent for CPLEX to accept:
+\[
+x^* \xrightarrow{\texttt{build\_sol}} (\texttt{succ}, \texttt{comp}, \texttt{ncomp})
+\xrightarrow{\texttt{apply\_patching}} \texttt{succ}
+\xrightarrow{\texttt{succ\_to\_permutation}} \pi
+\xrightarrow{\text{2-opt}} \pi
+\xrightarrow{\texttt{permutation\_to\_succ}} \texttt{succ}
+\xrightarrow{\texttt{xpos}} x^{\text{heu}},
+\]
+as detailed in Algorithm~\ref{alg:post_heur}. Splitting this pipeline into small,
+single-purpose conversion functions lets each of the two representations serve the component
+that actually needs it --- ordered, reversible access for local search, and explicit component
+tracking for possibly fragmented CPLEX output --- without forcing either the heuristic or the
+exact side of the solver to work with a data structure that is not suited to it.
 
 % -----------------------------------------------------------
 \subsection{Comparison with Heuristic Methods}
@@ -1093,6 +1447,26 @@ N.~Mladenović and P.~Hansen,
 F.~Glover,
 ``Future paths for integer programming and links to artificial intelligence,''
 \textit{Computers \& Operations Research}, vol.~13, no.~5, pp.~533--549, 1986.
+
+\bibitem{dantzig1954}
+G.~B. Dantzig, D.~R. Fulkerson, and S.~M. Johnson,
+``Solution of a large-scale traveling-salesman problem,''
+\textit{Journal of the Operations Research Society of America}, vol.~2, no.~4, pp.~393--410, 1954.
+
+\bibitem{padberg1991}
+M.~Padberg and G.~Rinaldi,
+``A branch-and-cut algorithm for the resolution of large-scale symmetric traveling salesman problems,''
+\textit{SIAM Review}, vol.~33, no.~1, pp.~60--100, 1991.
+
+\bibitem{fischetti2003}
+M.~Fischetti and A.~Lodi,
+``Local branching,''
+\textit{Mathematical Programming}, vol.~98, pp.~23--47, 2003.
+
+\bibitem{applegate2006}
+D.~L. Applegate, R.~E. Bixby, V.~Chv\'atal, and W.~J. Cook,
+\textit{The Traveling Salesman Problem: A Computational Study}.
+Princeton University Press, 2006.
 
 \end{thebibliography}
 
