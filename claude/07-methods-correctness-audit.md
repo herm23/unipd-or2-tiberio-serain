@@ -103,6 +103,19 @@ attribute is the **position** index, not the edge/move identity (coarser memory)
 criterion** (a tabu move that would beat the incumbent is still forbidden). Neither breaks correctness — the
 search stays feasible and best-so-far is tracked — they only affect search quality.
 
+**FIXED (2026-07-06)**: previously, if *every* candidate `(i,j)` pair was tabu (plausible on small
+instances with the default tenure=100), `twoOpt_refinement_iteration` called `print_error_and_die`,
+hard-crashing the whole process via `exit(1)` — skipping solution validation, the final cost/solution
+print, and the output file. This was also latently unsafe: the code path below the check applied
+`swap(&sol[a+1], &sol[b], ...)` with `a`/`b` still at their sentinel `-1` if reached without the early
+exit. Fixed by changing `twoOpt_refinement_iteration`'s signature to `short (..., double *deltaCost)`
+(mirroring `vns_kick`'s status-return/output-param convention): on an all-tabu iteration it now returns
+`1` without touching `sol`, and the caller (`twoOpt_refinement`) breaks its loop with `exitStatus = 2`,
+frees `temp_solution`, and prints an `[Tabu] Stopping: ...` notice (gated on `verbosity >= ESSENTIAL`) —
+the same graceful-exit pattern already used for the time-limit case (`exitStatus = 1`). Control then
+returns naturally through `optimize()`/`main()`, which still prints `## COST ... AT TIME ...`, dumps the
+final solution, and writes the `--out` file as usual.
+
 ---
 
 ## 4. Exact methods (CPLEX)

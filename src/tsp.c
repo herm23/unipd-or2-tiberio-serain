@@ -621,7 +621,8 @@ double greedy_nn_heuristic_iteration(const instance *inst, const unsigned int st
  * @param zbest Pointer to the variable storing the cost of the best solution found.
  * @param tbest Pointer to the variable storing the time when the best solution was found.
  * @param enable_plot Flag to enable (1) or disable (0) Gnuplot visualizations.
- * @return short Returns 0 on success, 1 if the time limit was exceeded.
+ * @return short Returns 0 on success, 1 if the time limit was exceeded, 2 if every candidate
+ *         move became tabu and the search stopped early (Tabu Search mode only).
  */
 short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, double *zbest, double *tbest, short enable_plot) {
     if (inst->verbosity >= DEBUG) printf("\t\t## STARTING twoOpt_refinement\n");
@@ -648,8 +649,21 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
             printf("\t\t -> 2-opt INIT with cost    %20lf at time %20lf\n", initial_cost, curr_time);
 
         // NOTE: Tabu search is already implemented in this step due to parameter definition
-        double temp_solution_cost_delta = twoOpt_refinement_iteration(inst, temp_solution);
+        double temp_solution_cost_delta = 0;
+        short iter_status = twoOpt_refinement_iteration(inst, temp_solution, &temp_solution_cost_delta);
         inst->iterations++; // NOTE: Update iterations after 2-opt !
+
+        if (iter_status == 1) {
+            // NOTE: Every candidate move is currently tabu: stop the search gracefully and
+            // let the program continue its normal course (final cost/solution print, output file).
+            if (inst->verbosity >= ESSENTIAL)
+                printf("\n[Tabu] Stopping: every candidate move is currently tabu (tenure=%d) - "
+                       "returning best solution found so far.\n", inst->tenure);
+            exitStatus = 2;
+            free(temp_solution);
+            break;
+        }
+
         initial_cost += temp_solution_cost_delta;
         curr_time = second() - inst->tstart;
 
@@ -723,9 +737,10 @@ short twoOpt_refinement(instance *inst, double time_limit, unsigned int *sol, do
  *
  * @param inst Pointer to the instance structure.
  * @param sol Pointer to the solution array to be refined.
- * @return double The improvement (reduction in cost) achieved by the iteration.
+ * @param deltaCost Output: the improvement (reduction in cost) achieved by the iteration.
+ * @return short Returns 0 on success, 1 if every candidate move is currently tabu (no move applied).
  */
-double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
+short twoOpt_refinement_iteration(const instance *inst, unsigned int *sol, double *deltaCost) {
     const int nodes = inst->nnodes;
 
     bool isDeltaSetted = false;
@@ -763,7 +778,12 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
         }
     }
 
-    if (inst->tenure > 0 && !isDeltaSetted) print_error_and_die("All moves are Tabu !");
+    // NOTE: If every candidate (i,j) is currently tabu, a/b were never assigned: bail out
+    // cleanly instead of falling through to the swap below (which would use a=b=-1).
+    if (inst->tenure > 0 && !isDeltaSetted) {
+        *deltaCost = 0;
+        return 1;
+    }
 
     //NOTE: If we are in the Tabu search mode i have to update the solution with the bost possible move founded
     if (minDeltaCost < -EPSILON || inst->tenure > 0) {
@@ -778,12 +798,13 @@ double twoOpt_refinement_iteration(const instance *inst, unsigned int *sol) {
         }
     }
 
-    return minDeltaCost;
+    *deltaCost = minDeltaCost;
+    return 0;
 }
 
 
 /**
- * @brief Applies the 3-opt kick by swapping 2 parts of the solution array
+ * @brief Applies the double bridge (4-opt) kick by reassembling the tour's 4 segments in a new order
  *
  * @param inst Pointer to the instance structure.
  * @param time_limit The maximum time allowed for the kick.
@@ -828,7 +849,7 @@ short vns_kick(instance *inst, double time_limit, unsigned int *sol, double *sol
        C: [j+1 ... k]
        D: [k+1 ... n-1]
        
-       Una classica 3-opt kick (Double Bridge) riassembla come: A -> D -> C -> B
+       Una classica 4-opt kick (Double Bridge) riassembla come: A -> D -> C -> B
     */
 
     unsigned int *temp_solution = (unsigned int *) malloc(inst->nnodes * sizeof(unsigned int));
