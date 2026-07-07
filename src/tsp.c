@@ -1244,8 +1244,7 @@ static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst)
     //NOTE: Counting active arcs and defining data structures
     int edge_cuts_counter = 0;
     for (int i = 0; i < inst->ncols; i++) {
-        //TODO: Defining a global Epsilon
-        if (xstar[i] > 1e-6) edge_cuts_counter++;
+        if (xstar[i] > EPSILON) edge_cuts_counter++;
     }
 
     // C10 fix: nothing to separate if there are no active edges (avoids malloc(0) UB and a CCcut_mincut on empty input).
@@ -1263,9 +1262,9 @@ static int my_callback_relaxation(CPXCALLBACKCONTEXTptr context, instance *inst)
         for (int j = i + 1; j < inst->nnodes; j++) {
             unsigned int idx = index_upper(i, j, inst->nnodes);
             if (xstar[idx] > 1e-6) {
-                elist[2 * edge_idx]     = i;
+                elist[2 * edge_idx] = i;
                 elist[2 * edge_idx + 1] = j;
-                xlist[edge_idx]         = xstar[idx];
+                xlist[edge_idx] = xstar[idx];
                 edge_idx++;
             }
         }
@@ -1351,13 +1350,12 @@ static void TSPopt_callbacks(instance *inst, CPXENVptr env, CPXLPptr lp, double 
         print_error_and_die("Error in CPXcallbacksetfunc()");
     }
 
-    // C2 fix: the candidate callback runs a heuristic that mutates shared `inst` state
+    // The candidate callback runs a heuristic that mutates shared `inst` state
     // (inst->iterations, and tabulist/plot when enabled). Force a single search thread so
     // concurrent callbacks cannot race on it. Trades parallel speed for correctness.
     CPXsetintparam(env, CPX_PARAM_THREADS, 1);
 
-    // Calcolo e impostazione del time limit residuo iniziale
-    double residual_time = time_left(inst); // T4 fix: shared residual helper (already clamped >= 0)
+    double residual_time = time_left(inst); // Shared residual helper (already clamped >= 0)
 
     CPXsetdblparam(env, CPX_PARAM_TILIM, residual_time);
 
@@ -1395,12 +1393,12 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
     if (CPXcallbacksetfunc(env, lp, contextid, my_callback, inst)) {
         print_error_and_die("Error in CPXcallbacksetfunc() inside Hard Fixing");
     }
-    CPXsetintparam(env, CPX_PARAM_THREADS, 1); // C2 fix: avoid races on shared inst from parallel callbacks
+    CPXsetintparam(env, CPX_PARAM_THREADS, 1); // Avoid races on shared inst from parallel callbacks
 
     // NOTE: Arrays required for CPXchgbds allocated once outside the loop
     int *indices_to_change = (int *) malloc(inst->nnodes * sizeof(int));
-    char *lu_bounds = (char *) malloc(inst->nnodes * sizeof(char));
-    double *bd_values = (double *) malloc(inst->nnodes * sizeof(double));
+    char *lu_bounds = (char *) malloc(inst->nnodes * sizeof(char)); //Lower bounds specification (All equal to L to change the lower bound)
+    double *bd_values = (double *) malloc(inst->nnodes * sizeof(double)); //(to fix a variable set the lb to 1)
 
     // NOTE: Allocation for temporary solution extraction inside the loop
     int *succ = (int *) calloc(inst->nnodes, sizeof(int));
@@ -1408,11 +1406,10 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
     int ncomp = 0;
     double *xstar = (double *) calloc(inst->ncols, sizeof(double));
 
-    // M3 fix: hoist the fixed-size MIP-start buffers out of the loop (were alloc/free'd every iteration).
-    // mipstart_ind is the constant column list 0..ncols-1; x_start_clique is rebuilt (memset) each iteration.
-    double *x_start_clique = (double *) calloc(inst->ncols, sizeof(double));
+    //NOTE: Data structure allocation to use in CPXaddmipstarts
+    double *x_start_clique = (double *) calloc(inst->ncols, sizeof(double)); //Contains all the arcs (1 values for selected ones, 0 otherwise)
     int *mipstart_ind = (int *) malloc(inst->ncols * sizeof(int));
-    for (int i = 0; i < inst->ncols; i++) mipstart_ind[i] = i;
+    for (int i = 0; i < inst->ncols; i++) mipstart_ind[i] = i; //Saving the arcs in this list for CPLEX implementation
 
     if (inst->verbosity >= INFO) {
         printf("\n[Hard-Fixing] Starting Matheuristic loop. Global Time Limit: %.2lf s\n", inst->timelimit);
@@ -1427,18 +1424,17 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
             break;
         }
 
-        // 1. Update the fixing probability p every 10 iterations
+        //NOTE: Update the fixing probability p every 10 iterations
         update_fixing_probability(&p, iteration, inst);
 
-        // 2. Inject the current incumbent into CPLEX via MIPSTART
-
-        // NOTE: First delete any existing MIP starts from previous iterations to avoid accumulation
+        // NOTE: Inject the current incumbent into CPLEX via MIPSTART and
+        // delete any existing MIP starts from previous iterations to avoid accumulation
         int num_existing_mipstarts = CPXgetnummipstarts(env, lp);
         if (num_existing_mipstarts > 0) {
             CPXdelmipstarts(env, lp, 0, num_existing_mipstarts - 1);
         }
 
-        memset(x_start_clique, 0, inst->ncols * sizeof(double)); // M3: reset the hoisted buffer
+        memset(x_start_clique, 0, inst->ncols * sizeof(double));
         for (int i = 0; i < inst->nnodes; i++) {
             int curr = inst->solution[i];
             int next = inst->solution[(i + 1) % inst->nnodes];
@@ -1451,7 +1447,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
         int beg = 0;
         CPXaddmipstarts(env, lp, 1, inst->ncols, &beg, mipstart_ind, x_start_clique, &mipstart_effort, NULL);
 
-        // 3. Fix variables with probability p based on the current permutation
+        // NOTE: Fix variables with probability p based on the current permutation
         int fixed_edges_count = 0;
         for (int i = 0; i < inst->nnodes; i++) {
             int curr = inst->solution[i];
@@ -1475,8 +1471,8 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
                    iteration, fixed_edges_count, inst->nnodes, residual_time);
         }
 
-        // 4. Solve the restricted model with CPLEX.
-        // T2 fix: bound each restricted MIP's time (aim for ~10 dives over a finite budget, 1s floor)
+        // NOTE: Solve the restricted model with CPLEX.
+        // bound each restricted MIP's time (aim for ~10 dives over a finite budget, 1s floor)
         // instead of handing the whole residual to a single solve.
         double per_iter = residual_time;
         if (inst->timelimit < 1e15) {
@@ -1489,7 +1485,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
         if (CPXmipopt(env, lp)) {
             if (inst->verbosity >= DEBUG) printf("Warning: CPXmipopt failed or subproblem infeasible at iteration %d.\n", iteration);
         } else {
-            // 5. If CPLEX found a solution, extract it and check for improvements
+            // NOTE: If CPLEX found a solution, extract it and check for improvements
             if (!CPXgetx(env, lp, xstar, 0, inst->ncols - 1)) {
                 build_sol(xstar, inst, succ, comp, &ncomp);
 
@@ -1498,7 +1494,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
 
                 if (sub_objval < inst->zbest) {
                     inst->zbest = sub_objval;
-                    inst->tbest = second() - inst->tstart; // T5 fix: record time of best
+                    inst->tbest = second() - inst->tstart;
                     succ_to_permutation(inst->nnodes, succ, inst->solution);
                     if (inst->verbosity >= INFO) {
                         printf("[Hard-Fixing] New global incumbent found! Cost: %.2lf at time %.2lf s\n", sub_objval, second() - inst->tstart);
@@ -1507,7 +1503,7 @@ static void TSPopt_hard_fixing(instance *inst, CPXENVptr env, CPXLPptr lp) {
             }
         }
 
-        // 6. Unfix all variables (Restore lower bounds back to 0.0)
+        // NOTE: Unfix all variables (Restore lower bounds back to 0.0)
         if (fixed_edges_count > 0) {
             for (int i = 0; i < fixed_edges_count; i++) {
                 bd_values[i] = 0.0;

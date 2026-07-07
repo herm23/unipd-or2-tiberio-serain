@@ -830,7 +830,6 @@ one of the weaker configurations evaluated in this study (average normalized cos
 win rate $27\%$), and is inconsistent with the recommendation derived from the tuning
 experiment above. Updating the default tenure to $\theta = \lfloor 0.1 n \rfloor$ is left as
 an actionable improvement rather than a design choice supported by the data collected here.
-\textbf{[Da rileggere -- Hermann]}
 
 % -----------------------------------------------------------
 \subsection{Comparison of Heuristic and Metaheuristic Methods}
@@ -1245,10 +1244,15 @@ and immediately refined with 2-opt using a second, larger fraction of the budget
 \end{algorithm}
 
 \paragraph{Retrieving the Solution.}
-Regardless of the mode selected, once the loop above terminates the best solution found is
-available as a binary vector $x^*$: for each pair $(i,j)$ with $x^*_{ij} > 0.5$, the edge
-$(i,j)$ is considered part of the tour, and \texttt{build\_sol} (Algorithm~\ref{alg:build_sol})
-is used to reconstruct the successor and component arrays one final time.
+How the final tour is retrieved depends on the family of modes. In the Benders and callback
+modes the best solution is available as a binary vector $x^*$: for each pair $(i,j)$ with
+$x^*_{ij} > 0.5$ the edge $(i,j)$ is considered part of the tour, and \texttt{build\_sol}
+(Algorithm~\ref{alg:build_sol}) reconstructs the successor and component arrays one final
+time; should the time limit expire while this solution is still fragmented, the patching
+heuristic (Algorithm~\ref{alg:patching}) repairs it into a single tour before the conversion
+to a permutation. The two matheuristic modes instead maintain their incumbent directly as a
+permutation array, updating it inside the loop each time an improving single-tour solution
+is extracted, so no final reconstruction step is needed after the loop terminates.
 
 \subsubsection{Tour Reconstruction (\texttt{build\_sol})}
 
@@ -1267,10 +1271,13 @@ The reconstruction proceeds by iterating over all nodes. For each unvisited node
 component is started and followed greedily along the selected edges until the component
 closes into a cycle. A valid optimal tour corresponds to \texttt{ncomp} $= 1$.
 
-If \texttt{ncomp} $> 1$, the solution contains sub-tours, indicating that sub-tour
-elimination constraints were insufficient. In a complete implementation, this would trigger
-the addition of SECs and a re-solve. A validation step verifies that each node has exactly
-degree 2 in the solution, raising an error otherwise.
+If \texttt{ncomp} $> 1$, the solution contains sub-tours, indicating that not enough
+sub-tour elimination constraints have been added yet. Depending on the mode, this triggers
+the addition of new SECs and a re-solve (Benders loop), the rejection of the candidate
+(callbacks), or --- if the time limit expires while the incumbent is still fragmented --- a
+final repair through the patching heuristic (Algorithm~\ref{alg:patching}). A validation
+step verifies that each node has exactly degree 2 in the solution, raising an error
+otherwise.
 
 \begin{algorithm}[H]
 \caption{Tour Reconstruction from ILP Solution (\texttt{build\_sol})}
@@ -1344,11 +1351,13 @@ fragmented, edge-based view must become a linear, position-based view, or vice v
           instance's current best solution.
     \item \texttt{permutation\_to\_succ} performs the inverse mapping,
           $\texttt{succ}[\pi_i] \leftarrow \pi_{(i+1) \bmod n}$ for every $i$, and is used
-          whenever a permutation-based incumbent (e.g., the warm-started tour built by
-          \texttt{matheuristic\_warm\_start}, Algorithm~\ref{alg:warmstart}) must be
-          re-expressed as an edge set --- for instance, to determine which variables to fix in
-          Hard Fixing, which edges to include in the Local Branching soft-fixing row, or which
-          edges to mark in $x^{\text{heu}}$ before posting a heuristic solution to CPLEX.
+          whenever a permutation-based tour must be re-expressed in successor form --- in
+          particular, before marking the edges of $x^{\text{heu}}$ when posting a refined
+          heuristic solution to CPLEX (Algorithm~\ref{alg:post_heur}). The same
+          $\pi_i \rightarrow \pi_{(i+1) \bmod n}$ edge mapping is also applied inline (through
+          \texttt{xpos}, without materializing the \texttt{succ} array) to determine which
+          variables to fix in Hard Fixing and which edges enter the Local Branching
+          soft-fixing row.
 \end{itemize}
 
 \paragraph{A typical conversion pipeline.}
@@ -1386,9 +1395,10 @@ cuts and heuristic warm-starting strategies.
 
 In the context of this project, the exact method serves primarily as a reference for
 evaluating the optimality gap of heuristic solutions on small benchmark instances. The
-normalized cost ratios reported in the comparison tables (Tables~\ref{tab:method_comparison})
-were computed with respect to the CPLEX optimal solution for instances where it was
-obtainable within a reasonable time limit.
+normalized cost ratios reported in the comparison table (Table~\ref{tab:method_comparison})
+were computed with respect to the best solution known for each instance; on the small
+instances where CPLEX certified the optimum within the time limit, this reference coincides
+with the exact optimum.
 
 
 % ============================================================
